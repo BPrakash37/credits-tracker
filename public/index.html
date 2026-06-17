@@ -280,20 +280,35 @@ function logout() {
 const uid = () => USERNAME;
 
 async function loadAll() {
-  const [c, d, b, cc, inf, meta] = await Promise.all([
-    sb.from('credits').select('*').eq('user_id', uid()).order('date'),
-    sb.from('disbursements').select('*').eq('user_id', uid()).order('date'),
-    sb.from('bills').select('*').eq('user_id', uid()).order('month'),
-    sb.from('cc_bills').select('*').eq('user_id', uid()),
-    sb.from('inflows').select('*').eq('user_id', uid()),
-    sb.from('user_meta').select('*').eq('user_id', uid()),
-  ]);
-  STATE.credits       = c.data || [];
-  STATE.disbursements = d.data || [];
-  STATE.bills         = b.data || [];
-  STATE.ccBills       = cc.data || [];
-  STATE.inflows       = inf.data || [];
-  STATE.sliceBalance  = meta.data?.[0]?.slice_balance || 0;
+  try {
+    const [c, d, b, cc, inf, meta] = await Promise.all([
+      sb.from('credits').select('*').eq('user_id', uid()).order('date'),
+      sb.from('disbursements').select('*').eq('user_id', uid()).order('date'),
+      sb.from('bills').select('*').eq('user_id', uid()).order('month'),
+      sb.from('cc_bills').select('*').eq('user_id', uid()),
+      sb.from('inflows').select('*').eq('user_id', uid()),
+      sb.from('user_meta').select('*').eq('user_id', uid()),
+    ]);
+
+    console.log("Credits:", c);
+    console.log("Disbursements:", d);
+    console.log("Bills:", b);
+    console.log("CC Bills:", cc);
+    console.log("Inflows:", inf);
+    console.log("User Meta:", meta);
+
+    STATE.credits = c.data ?? [];
+    STATE.disbursements = d.data ?? [];
+    STATE.bills = b.data ?? [];
+    STATE.ccBills = cc.data ?? [];
+    STATE.inflows = inf.data ?? [];
+    STATE.sliceBalance = meta.data?.[0]?.slice_balance ?? 0;
+
+    console.log("STATE:", STATE);
+
+  } catch (err) {
+    console.error("loadAll() failed:", err);
+  }
 }
 
 // ── Tabs ──────────────────────────────────────
@@ -314,6 +329,7 @@ function renderTab(n) {
 }
 
 // ── DASHBOARD ─────────────────────────────────
+console.log("renderDashboard called");
 function renderDashboard() {
   const tC  = STATE.credits.reduce((s,c)=>s+ +c.amount,0);
   const tD  = STATE.disbursements.reduce((s,d)=>s+ +d.amount,0);
