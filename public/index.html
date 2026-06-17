@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Credits Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0e0f13; --surface: #16181f; --surface2: #1d1f28;
+    --border: #252830; --text: #e8eaf0; --muted: #60657a;
+    --green: #3de89a; --red: #f0654a; --blue: #7b8cde; --yellow: #f5c842;
+    --mono: 'Space Mono', monospace; --sans: 'Space Grotesk', system-ui, sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  /* AUTH */
+  #auth-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px; }
+  .auth-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px 32px; width:100%; max-width:380px; }
+  .auth-logo { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .auth-title { font-size:26px; font-weight:700; margin-bottom:6px; }
+  .auth-sub { font-size:13px; color:var(--muted); margin-bottom:32px; line-height:1.5; }
+  .auth-label { display:block; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .auth-input {
+    width:100%; background:var(--surface2); border:1px solid var(--border);
+    border-radius:10px; color:var(--text); font-family:var(--sans);
+    font-size:16px; padding:14px 16px; outline:none; transition:border-color .15s;
+    margin-bottom:12px;
+  }
+  .auth-input:focus { border-color:var(--green); }
+  .auth-btn {
+    width:100%; background:var(--green); color:var(--bg); border:none;
+    border-radius:10px; padding:14px; font-family:var(--sans);
+    font-weight:700; font-size:15px; cursor:pointer; transition:opacity .15s;
+  }
+  .auth-btn:hover { opacity:.88; }
+  .auth-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .auth-error { color:var(--red); font-size:12px; margin-top:10px; text-align:center; min-height:18px; }
+  .auth-hint { color:var(--muted); font-size:11px; text-align:center; margin-top:16px; line-height:1.6; }
+
+  /* WHO'S ONLINE badges */
+  .users-online { margin-top:20px; }
+  .users-label { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .user-chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .user-chip {
+    background:var(--surface2); border:1px solid var(--border); border-radius:20px;
+    padding:5px 12px; font-size:12px; color:var(--muted); cursor:pointer;
+    transition:all .15s;
+  }
+  .user-chip:hover { border-color:var(--green); color:var(--green); }
+
+  /* APP */
+  #app-screen { display:none; }
+  .topbar {
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:12px 20px; display:flex; align-items:center;
+    justify-content:space-between; position:sticky; top:0; z-index:100;
+  }
+  .app-name { font-size:15px; font-weight:700; }
+  .app-sub { font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); }
+  .topbar-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .user-badge { background:var(--green); color:var(--bg); border-radius:20px; padding:5px 14px; font-size:12px; font-weight:700; }
+  .btn-sm { background:transparent; border:1px solid var(--border); border-radius:8px; color:var(--muted); font-family:var(--sans); font-size:12px; padding:6px 12px; cursor:pointer; transition:all .15s; }
+  .btn-sm:hover { border-color:var(--green); color:var(--green); }
+  .btn-out { border-color:var(--red); color:var(--red); }
+  .btn-out:hover { background:var(--red); color:#fff; }
+
+  .tabs { display:flex; gap:4px; padding:12px 20px 0; border-bottom:1px solid var(--border); overflow-x:auto; max-width:900px; margin:0 auto; }
+  .tab-btn { padding:8px 16px; border-radius:8px 8px 0 0; border:none; cursor:pointer; font-family:var(--sans); font-size:12px; font-weight:600; letter-spacing:.05em; background:transparent; color:var(--muted); border-bottom:2px solid transparent; transition:all .15s; white-space:nowrap; }
+  .tab-btn.active { color:var(--green); border-bottom-color:var(--green); }
+  .content { max-width:900px; margin:0 auto; padding:20px 16px 60px; }
+
+  /* Cards */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:14px; }
+  .card-green { border-top:3px solid var(--green); }
+  .card-red { border-top:3px solid var(--red); }
+  .card-blue { border-top:3px solid var(--blue); }
+  .card-yellow { border-top:3px solid var(--yellow); }
+  .sec-label { font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+  .kpi-val { font-family:var(--mono); font-size:28px; font-weight:700; letter-spacing:-1px; }
+  .kpi-sub { font-size:11px; color:var(--muted); margin-top:3px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media(max-width:500px) { .grid2 { grid-template-columns:1fr; } }
+
+  /* Forms */
+  .form-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:flex-end; }
+  .f { flex:1; min-width:110px; }
+  .f label { display:block; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  input[type=text],input[type=number],input[type=date],input[type=month] {
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); font-family:var(--sans); font-size:13px;
+    padding:9px 12px; outline:none; width:100%; transition:border-color .15s;
+  }
+  input:focus { border-color:var(--blue); }
+  .btn-add { border:none; border-radius:8px; padding:9px 18px; font-family:var(--sans); font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .btn-green { background:var(--green); color:var(--bg); }
+  .btn-red { background:var(--red); color:#fff; }
+  .btn-blue { background:var(--blue); color:#fff; }
+  .btn-yellow { background:var(--yellow); color:var(--bg); }
+
+  /* Rows */
+  .data-row { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .data-row:last-child { border-bottom:none; }
+  .d-date { font-family:var(--mono); font-size:10px; color:var(--muted); width:82px; flex-shrink:0; }
+  .d-name { flex:1; font-weight:500; }
+  .d-note { color:var(--muted); font-size:11px; flex:1; }
+  .pill { border-radius:20px; padding:2px 10px; font-size:10px; font-family:var(--mono); font-weight:700; white-space:nowrap; }
+  .p-green { background:#3de89a22; color:var(--green); }
+  .p-red { background:#f0654a22; color:var(--red); }
+  .p-blue { background:#7b8cde22; color:var(--blue); }
+  .p-yellow { background:#f5c84222; color:var(--yellow); }
+  .del { background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:10px; padding:2px 7px; cursor:pointer; flex-shrink:0; }
+  .del:hover { border-color:var(--red); color:var(--red); }
+
+  /* Bar chart */
+  .bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .bar-lbl { font-family:var(--mono); font-size:10px; color:var(--muted); width:40px; flex-shrink:0; }
+  .bar-track { flex:1; height:14px; background:var(--surface2); border-radius:4px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:4px; }
+  .bar-amt { font-family:var(--mono); font-size:10px; color:var(--muted); width:54px; text-align:right; }
+
+  /* Net */
+  .net-row { display:flex; justify-content:space-between; align-items:baseline; padding:8px 0; border-bottom:1px dashed var(--border); font-size:13px; }
+  .net-row:last-child { border-bottom:none; }
+  .net-final { display:flex; justify-content:space-between; align-items:baseline; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+  .divider { border:none; border-top:1px solid var(--border); margin:12px 0; }
+  .empty { color:var(--muted); font-size:13px; text-align:center; padding:20px 0; }
+
+  /* Toast */
+  #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--green); color:var(--bg); border-radius:8px; padding:10px 22px; font-weight:700; font-size:13px; z-index:999; box-shadow:0 4px 20px #0008; transition:transform .25s ease; pointer-events:none; }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+  #toast.error { background:var(--red); color:#fff; }
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">Family Finance</div>
+    <div class="auth-title">Credits Tracker</div>
+    <div class="auth-sub">Enter your username to load your data.<br/>New username = new account, automatically.</div>
+
+    <label class="auth-label">Your Username</label>
+    <input class="auth-input" type="text" id="username-input" placeholder="e.g. bhanu, dad, prakash"
+      onkeydown="if(event.key==='Enter') enterApp()" autocomplete="off" autocapitalize="off" />
+
+    <button class="auth-btn" onclick="enterApp()">Enter →</button>
+    <div class="auth-error" id="auth-error"></div>
+
+    <div class="users-online" id="users-online" style="display:none">
+      <div class="users-label">Quick login</div>
+      <div class="user-chips" id="user-chips"></div>
+    </div>
+
+    <div class="auth-hint">No password needed. Just remember your username.<br/>Each username has its own private data.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <div class="topbar">
+    <div>
+      <div class="app-sub">Family Finance</div>
+      <div class="app-name">Credits Tracker</div>
+    </div>
+    <div class="topbar-right">
+      <div class="user-badge" id="user-badge">—</div>
+      <button class="btn-sm" onclick="downloadCSV()">⬇ CSV</button>
+      <button class="btn-sm btn-out" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('dashboard',this)">Dashboard</button>
+    <button class="tab-btn" onclick="switchTab('credits',this)">Credits</button>
+    <button class="tab-btn" onclick="switchTab('disbursements',this)">Disbursements</button>
+    <button class="tab-btn" onclick="switchTab('bills',this)">Bills</button>
+    <button class="tab-btn" onclick="switchTab('cc',this)">CC &amp; Inflows</button>
+  </div>
+
+  <div class="content">
+    <div id="tab-dashboard"></div>
+    <div id="tab-credits" style="display:none"></div>
+    <div id="tab-disbursements" style="display:none"></div>
+    <div id="tab-bills" style="display:none"></div>
+    <div id="tab-cc" style="display:none"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG — paste your values here
+// ══════════════════════════════════════════════
+const SUPABASE_URL     = 'https://xvtbmxtstejldgsjzdft.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2dGJteHRzdGVqbGRnc2p6ZGZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzM1NzAsImV4cCI6MjA5NzI0OTU3MH0.ointE-k7Few1JKkZNaCjwLZSePKII1sWyn_KaznTF_8';
+// ══════════════════════════════════════════════
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let USERNAME = null;
+let STATE = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
+let currentTab = 'dashboard';
+
+// ── Helpers ──────────────────────────────────
+const fmt = n => n>=100000?`₹${(n/100000).toFixed(2)}L`:n>=1000?`₹${(n/1000).toFixed(1)}K`:`₹${Number(n).toLocaleString('en-IN')}`;
+const fmtF = n => `₹${Math.abs(n).toLocaleString('en-IN')}`;
+const today = () => new Date().toISOString().split('T')[0];
+const monthLbl = m => { const [y,mo]=m.split('-'); return new Date(+y,+mo-1).toLocaleString('default',{month:'short',year:'2-digit'}); };
+
+function toast(msg, isErr=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isErr ? 'error' : '';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── Known users (for quick login chips) ──────
+function loadKnownUsers() {
+  const stored = localStorage.getItem('ct_known_users');
+  return stored ? JSON.parse(stored) : [];
+}
+function saveKnownUser(u) {
+  const list = loadKnownUsers();
+  if (!list.includes(u)) { list.push(u); localStorage.setItem('ct_known_users', JSON.stringify(list)); }
+}
+
+function renderUserChips() {
+  const users = loadKnownUsers();
+  if (users.length === 0) return;
+  document.getElementById('users-online').style.display = '';
+  document.getElementById('user-chips').innerHTML = users.map(u =>
+    `<div class="user-chip" onclick="quickLogin('${u}')">${u}</div>`
+  ).join('');
+}
+
+function quickLogin(u) {
+  document.getElementById('username-input').value = u;
+  enterApp();
+}
+
+// ── Auth ─────────────────────────────────────
+async function enterApp() {
+  const raw = document.getElementById('username-input').value.trim().toLowerCase();
+  if (!raw) { document.getElementById('auth-error').textContent = 'Please enter a username'; return; }
+  if (raw.length < 2) { document.getElementById('auth-error').textContent = 'Username too short'; return; }
+
+  document.querySelector('.auth-btn').disabled = true;
+  document.querySelector('.auth-btn').textContent = 'Loading...';
+
+  USERNAME = raw;
+  saveKnownUser(raw);
+  await loadAll();
+
+  document.getElementById('user-badge').textContent = raw;
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = '';
+  renderDashboard();
+
+  document.querySelector('.auth-btn').disabled = false;
+  document.querySelector('.auth-btn').textContent = 'Enter →';
+}
+
+function logout() {
+  USERNAME = null;
+  STATE = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
+  document.getElementById('username-input').value = '';
+  document.getElementById('auth-error').textContent = '';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.display = 'none';
+  renderUserChips();
+}
+
+// ── DB ────────────────────────────────────────
+const uid = () => USERNAME;
+
+async function loadAll() {
+  const [c, d, b, cc, inf, meta] = await Promise.all([
+    sb.from('credits').select('*').eq('user_id', uid()).order('date'),
+    sb.from('disbursements').select('*').eq('user_id', uid()).order('date'),
+    sb.from('bills').select('*').eq('user_id', uid()).order('month'),
+    sb.from('cc_bills').select('*').eq('user_id', uid()),
+    sb.from('inflows').select('*').eq('user_id', uid()),
+    sb.from('user_meta').select('*').eq('user_id', uid()),
+  ]);
+  STATE.credits       = c.data || [];
+  STATE.disbursements = d.data || [];
+  STATE.bills         = b.data || [];
+  STATE.ccBills       = cc.data || [];
+  STATE.inflows       = inf.data || [];
+  STATE.sliceBalance  = meta.data?.[0]?.slice_balance || 0;
+}
+
+// ── Tabs ──────────────────────────────────────
+const TABS = ['dashboard','credits','disbursements','bills','cc'];
+function switchTab(name, btn) {
+  TABS.forEach(t => document.getElementById('tab-'+t).style.display = t===name?'':'none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTab = name;
+  renderTab(name);
+}
+function renderTab(n) {
+  if(n==='dashboard') renderDashboard();
+  if(n==='credits') renderCredits();
+  if(n==='disbursements') renderDisbursements();
+  if(n==='bills') renderBills();
+  if(n==='cc') renderCC();
+}
+
+// ── DASHBOARD ─────────────────────────────────
+function renderDashboard() {
+  const tC  = STATE.credits.reduce((s,c)=>s+ +c.amount,0);
+  const tD  = STATE.disbursements.reduce((s,d)=>s+ +d.amount,0);
+  const tCC = STATE.ccBills.reduce((s,c)=>s+ +c.amount,0);
+  const tI  = STATE.inflows.reduce((s,i)=>s+ +i.amount,0);
+  const rem = tC - tD;
+  const net = STATE.sliceBalance + tI - tCC;
+  const debt = rem - net;
+
+  const monthly = {};
+  STATE.credits.forEach(c => { const m=c.date.slice(0,7); monthly[m]=(monthly[m]||0)+ +c.amount; });
+  const months = Object.entries(monthly).sort(([a],[b])=>a.localeCompare(b));
+  const maxM = Math.max(...months.map(([,v])=>v), 1);
+
+  document.getElementById('tab-dashboard').innerHTML = `
+    <div class="grid2" style="margin-bottom:14px">
+      ${kpi('Total Credits', fmt(tC), 'var(--green)', STATE.credits.length+' transactions')}
+      ${kpi('Disbursed', fmt(tD), 'var(--red)', 'paid out')}
+      ${kpi('Remaining Credit', fmt(rem), 'var(--yellow)', 'credits − disbursed')}
+      ${kpi('Amount Owed', fmt(Math.max(0,debt)), debt>0?'var(--red)':'var(--green)', 'to repay')}
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="sec-label">Monthly Credits</div>
+      ${months.length===0?'<div class="empty">No credits yet</div>':months.map(([m,v])=>`
+        <div class="bar-row">
+          <span class="bar-lbl">${monthLbl(m)}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${(v/maxM)*100}%;background:var(--green);opacity:.85"></div></div>
+          <span class="bar-amt">${fmt(v)}</span>
+        </div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="sec-label">Net Position</div>
+      <div class="net-row"><span style="color:var(--muted)">Slice Balance</span><span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(STATE.sliceBalance)}</span></div>
+      <div class="net-row"><span style="color:var(--muted)">Inflows</span><span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(tI)}</span></div>
+      <div class="net-row"><span style="color:var(--muted)">CC Bills</span><span style="font-family:var(--mono);color:var(--red)">− ${fmtF(tCC)}</span></div>
+      <div class="net-final">
+        <span class="sec-label" style="margin:0">Net Worth</span>
+        <span style="font-family:var(--mono);font-size:22px;font-weight:700;color:${net>=0?'var(--green)':'var(--red)'}">${fmtF(net)}</span>
+      </div>
+    </div>`;
+}
+
+function kpi(label, value, color, sub) {
+  return `<div class="card" style="border-top:3px solid ${color}">
+    <div class="sec-label">${label}</div>
+    <div class="kpi-val" style="color:${color}">${value}</div>
+    <div class="kpi-sub">${sub}</div>
+  </div>`;
+}
+
+// ── CREDITS ───────────────────────────────────
+function renderCredits() {
+  const sorted = [...STATE.credits].sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('tab-credits').innerHTML = `
+    <div class="card card-green">
+      <div class="sec-label">Add Credit from Dad</div>
+      <div class="form-row">
+        <div class="f"><label>Date</label><input type="date" id="c-date" value="${today()}"/></div>
+        <div class="f"><label>Amount (₹)</label><input type="number" id="c-amount" placeholder="30000"/></div>
+        <div class="f"><label>Note</label><input type="text" id="c-note" placeholder="Optional"/></div>
+        <button class="btn-add btn-green" onclick="addCredit()">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec-label">All Credits — ${STATE.credits.length} entries · ${fmt(STATE.credits.reduce((s,c)=>s+ +c.amount,0))}</div>
+      ${sorted.length===0?'<div class="empty">No credits yet</div>':sorted.map(c=>`
+        <div class="data-row">
+          <span class="d-date">${c.date}</span>
+          <span class="d-note">${c.note||'—'}</span>
+          <span class="pill p-green">${fmt(+c.amount)}</span>
+          <button class="del" onclick="del('credits','${c.id}')">✕</button>
+        </div>`).join('')}
+    </div>`;
+}
+
+async function addCredit() {
+  const date = document.getElementById('c-date').value;
+  const amount = parseFloat(document.getElementById('c-amount').value);
+  const note = document.getElementById('c-note').value.trim();
+  if (!date||!amount) { toast('Fill date and amount', true); return; }
+  const { data, error } = await sb.from('credits').insert({ user_id:uid(), date, amount, note }).select().single();
+  if (error) { toast('Error: '+error.message, true); return; }
+  STATE.credits.push(data); renderCredits(); renderDashboard(); toast('Credit added ✓');
+}
+
+// ── DISBURSEMENTS ─────────────────────────────
+function renderDisbursements() {
+  const sorted = [...STATE.disbursements].sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('tab-disbursements').innerHTML = `
+    <div class="card card-red">
+      <div class="sec-label">Add Disbursement (money paid to someone)</div>
+      <div class="form-row">
+        <div class="f"><label>Date</label><input type="date" id="d-date" value="${today()}"/></div>
+        <div class="f"><label>Person</label><input type="text" id="d-name" placeholder="e.g. Narayana"/></div>
+        <div class="f"><label>Amount (₹)</label><input type="number" id="d-amount" placeholder="25000"/></div>
+        <div class="f"><label>Note</label><input type="text" id="d-note" placeholder="Optional"/></div>
+        <button class="btn-add btn-red" onclick="addDisb()">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec-label">All Disbursements — ${STATE.disbursements.length} entries · ${fmt(STATE.disbursements.reduce((s,d)=>s+ +d.amount,0))}</div>
+      ${sorted.length===0?'<div class="empty">No disbursements yet</div>':sorted.map(d=>`
+        <div class="data-row">
+          <span class="d-date">${d.date}</span>
+          <span class="d-name">${d.name}</span>
+          <span class="d-note">${d.note||''}</span>
+          <span class="pill p-red">${fmt(+d.amount)}</span>
+          <button class="del" onclick="del('disbursements','${d.id}')">✕</button>
+        </div>`).join('')}
+    </div>`;
+}
+
+async function addDisb() {
+  const date = document.getElementById('d-date').value;
+  const name = document.getElementById('d-name').value.trim();
+  const amount = parseFloat(document.getElementById('d-amount').value);
+  const note = document.getElementById('d-note').value.trim();
+  if (!date||!name||!amount) { toast('Fill date, name and amount', true); return; }
+  const { data, error } = await sb.from('disbursements').insert({ user_id:uid(), date, name, amount, note }).select().single();
+  if (error) { toast('Error: '+error.message, true); return; }
+  STATE.disbursements.push(data); renderDisbursements(); renderDashboard(); toast('Added ✓');
+}
+
+// ── BILLS ─────────────────────────────────────
+function renderBills() {
+  const sorted = [...STATE.bills].sort((a,b)=>b.month.localeCompare(a.month));
+  document.getElementById('tab-bills').innerHTML = `
+    <div class="card card-blue">
+      <div class="sec-label">Add Monthly Bill</div>
+      <div class="form-row">
+        <div class="f"><label>Month</label><input type="month" id="b-month" value="${today().slice(0,7)}"/></div>
+        <div class="f"><label>Current Bill (₹)</label><input type="number" id="b-bill" placeholder="1541"/></div>
+        <div class="f"><label>Extra Label</label><input type="text" id="b-label" placeholder="House Tax"/></div>
+        <div class="f"><label>Extra Amount</label><input type="number" id="b-extra" placeholder="optional"/></div>
+        <button class="btn-add btn-blue" onclick="addBill()">Save</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec-label">All Bills</div>
+      ${sorted.length===0?'<div class="empty">No bills yet</div>':sorted.map(b=>{
+        const extras = JSON.parse(b.other_bills||'[]');
+        const total = +b.current_bill + extras.reduce((s,o)=>s+ +o.amount,0);
+        return `<div class="data-row" style="flex-wrap:wrap;gap:6px">
+          <span style="font-family:var(--mono);font-size:11px;color:var(--blue);width:52px">${monthLbl(b.month)}</span>
+          <span class="d-note">Bill: ₹${Number(b.current_bill).toLocaleString('en-IN')} ${extras.map(e=>`· ${e.label}: ₹${Number(e.amount).toLocaleString('en-IN')}`).join('')}</span>
+          <span class="pill p-blue">${fmtF(total)}</span>
+          <button class="del" onclick="del('bills','${b.id}')">✕</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function addBill() {
+  const month = document.getElementById('b-month').value;
+  const current_bill = parseFloat(document.getElementById('b-bill').value)||0;
+  const label = document.getElementById('b-label').value.trim();
+  const extra = parseFloat(document.getElementById('b-extra').value)||0;
+  const other_bills = JSON.stringify(label&&extra?[{label,amount:extra}]:[]);
+  if (!month) { toast('Select a month', true); return; }
+  const { data, error } = await sb.from('bills').insert({ user_id:uid(), month, current_bill, other_bills }).select().single();
+  if (error) { toast('Error: '+error.message, true); return; }
+  STATE.bills.push(data); renderBills(); renderDashboard(); toast('Bill saved ✓');
+}
+
+// ── CC & INFLOWS ──────────────────────────────
+function renderCC() {
+  const tCC = STATE.ccBills.reduce((s,c)=>s+ +c.amount,0);
+  const tI  = STATE.inflows.reduce((s,i)=>s+ +i.amount,0);
+  document.getElementById('tab-cc').innerHTML = `
+    <div class="grid2">
+      <div>
+        <div class="card card-red" style="margin-bottom:12px">
+          <div class="sec-label">Add CC Bill</div>
+          <div class="form-row" style="flex-direction:column;gap:8px">
+            <input type="text" id="cc-name" placeholder="Card name e.g. HSBC CC"/>
+            <div style="display:flex;gap:8px">
+              <input type="number" id="cc-amount" placeholder="Amount (₹)" style="flex:1"/>
+              <button class="btn-add btn-red" onclick="addCC()">Add</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-label">CC Bills · ${fmt(tCC)}</div>
+          ${STATE.ccBills.length===0?'<div class="empty">None</div>':STATE.ccBills.map(c=>`
+            <div class="data-row">
+              <span class="d-name">${c.name}</span>
+              <span class="pill p-red">${fmt(+c.amount)}</span>
+              <button class="del" onclick="del('cc_bills','${c.id}')">✕</button>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div class="card card-green" style="margin-bottom:12px">
+          <div class="sec-label">Add Inflow</div>
+          <div class="form-row" style="flex-direction:column;gap:8px">
+            <input type="text" id="inf-name" placeholder="Source e.g. Abhi"/>
+            <div style="display:flex;gap:8px">
+              <input type="number" id="inf-amount" placeholder="Amount (₹)" style="flex:1"/>
+              <button class="btn-add btn-green" onclick="addInflow()">Add</button>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="sec-label">Inflows · ${fmt(tI)}</div>
+          ${STATE.inflows.length===0?'<div class="empty">None</div>':STATE.inflows.map(i=>`
+            <div class="data-row">
+              <span class="d-name">${i.name}</span>
+              <span class="pill p-green">${fmt(+i.amount)}</span>
+              <button class="del" onclick="del('inflows','${i.id}')">✕</button>
+            </div>`).join('')}
+        </div>
+        <div class="card">
+          <div class="sec-label">Slice Balance (₹)</div>
+          <div style="display:flex;gap:8px">
+            <input type="number" id="slice-val" value="${STATE.sliceBalance}" style="flex:1"/>
+            <button class="btn-add btn-yellow" onclick="saveSlice()">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function addCC() {
+  const name = document.getElementById('cc-name').value.trim();
+  const amount = parseFloat(document.getElementById('cc-amount').value);
+  if (!name||!amount) { toast('Fill card name and amount', true); return; }
+  const { data, error } = await sb.from('cc_bills').insert({ user_id:uid(), name, amount }).select().single();
+  if (error) { toast('Error: '+error.message, true); return; }
+  STATE.ccBills.push(data); renderCC(); renderDashboard(); toast('Added ✓');
+}
+
+async function addInflow() {
+  const name = document.getElementById('inf-name').value.trim();
+  const amount = parseFloat(document.getElementById('inf-amount').value);
+  if (!name||!amount) { toast('Fill source and amount', true); return; }
+  const { data, error } = await sb.from('inflows').insert({ user_id:uid(), name, amount }).select().single();
+  if (error) { toast('Error: '+error.message, true); return; }
+  STATE.inflows.push(data); renderCC(); renderDashboard(); toast('Added ✓');
+}
+
+async function saveSlice() {
+  const val = parseFloat(document.getElementById('slice-val').value)||0;
+  STATE.sliceBalance = val;
+  await sb.from('user_meta').upsert({ user_id:uid(), slice_balance:val });
+  renderDashboard(); toast('Slice balance updated ✓');
+}
+
+// ── DELETE ────────────────────────────────────
+async function del(table, id) {
+  await sb.from(table).delete().eq('id', id);
+  if(table==='credits')       STATE.credits       = STATE.credits.filter(r=>r.id!=id);
+  if(table==='disbursements') STATE.disbursements = STATE.disbursements.filter(r=>r.id!=id);
+  if(table==='bills')         STATE.bills         = STATE.bills.filter(r=>r.id!=id);
+  if(table==='cc_bills')      STATE.ccBills       = STATE.ccBills.filter(r=>r.id!=id);
+  if(table==='inflows')       STATE.inflows       = STATE.inflows.filter(r=>r.id!=id);
+  renderTab(currentTab); renderDashboard(); toast('Deleted');
+}
+
+// ── CSV DOWNLOAD ──────────────────────────────
+function downloadCSV() {
+  const rows = [['Type','Date/Month','Name','Amount','Note']];
+  STATE.credits.forEach(c => rows.push(['Credit', c.date, '', c.amount, c.note||'']));
+  STATE.disbursements.forEach(d => rows.push(['Disbursement', d.date, d.name, d.amount, d.note||'']));
+  STATE.bills.forEach(b => {
+    const extras = JSON.parse(b.other_bills||'[]');
+    rows.push(['Bill-Current', b.month, '', b.current_bill, '']);
+    extras.forEach(e => rows.push(['Bill-Extra', b.month, '', e.amount, e.label]));
+  });
+  STATE.ccBills.forEach(c => rows.push(['CC Bill', '', c.name, c.amount, '']));
+  STATE.inflows.forEach(i => rows.push(['Inflow', '', i.name, i.amount, '']));
+  rows.push(['Slice Balance', '', '', STATE.sliceBalance, '']);
+  const csv = rows.map(r => r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `credits-${USERNAME}-${today()}.csv`;
+  a.click();
+  toast('Downloaded ✓');
+}
+
+// ── INIT ──────────────────────────────────────
+renderUserChips();
+</script>
+</body>
+</html>
