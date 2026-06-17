@@ -331,10 +331,13 @@ function renderTab(n) {
 // ── DASHBOARD ─────────────────────────────────
 console.log("renderDashboard called");
 function renderDashboard() {
+  console.log("Dashboard started");
+
   const tC  = STATE.credits.reduce((s,c)=>s+ +c.amount,0);
   const tD  = STATE.disbursements.reduce((s,d)=>s+ +d.amount,0);
   const tCC = STATE.ccBills.reduce((s,c)=>s+ +c.amount,0);
   const tI  = STATE.inflows.reduce((s,i)=>s+ +i.amount,0);
+  console.log({tC, tD, tCC, tI});
   const rem = tC - tD;
   const net = STATE.sliceBalance + tI - tCC;
   const debt = rem - net;
@@ -343,7 +346,7 @@ function renderDashboard() {
   STATE.credits.forEach(c => { const m=c.date.slice(0,7); monthly[m]=(monthly[m]||0)+ +c.amount; });
   const months = Object.entries(monthly).sort(([a],[b])=>a.localeCompare(b));
   const maxM = Math.max(...months.map(([,v])=>v), 1);
-
+  console.log("About to set innerHTML");
   document.getElementById('tab-dashboard').innerHTML = `
     <div class="grid2" style="margin-bottom:14px">
       ${kpi('Total Credits', fmt(tC), 'var(--green)', STATE.credits.length+' transactions')}
@@ -370,7 +373,9 @@ function renderDashboard() {
         <span style="font-family:var(--mono);font-size:22px;font-weight:700;color:${net>=0?'var(--green)':'var(--red)'}">${fmtF(net)}</span>
       </div>
     </div>`;
+  console.log("Dashboard rendered");
 }
+
 
 function kpi(label, value, color, sub) {
   return `<div class="card" style="border-top:3px solid ${color}">
