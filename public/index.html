@@ -259,7 +259,7 @@ async function enterApp() {
 
   document.getElementById('user-badge').textContent = raw;
   document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = '';
+  document.getElementById('app-screen').style.cssText = 'display:block !important; min-height:100vh;';
   renderDashboard();
 
   document.querySelector('.auth-btn').disabled = false;
@@ -272,7 +272,8 @@ function logout() {
   document.getElementById('username-input').value = '';
   document.getElementById('auth-error').textContent = '';
   document.getElementById('auth-screen').style.display = 'flex';
-  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('app-screen').style.cssText = 'display:block !important; min-height:100vh;';
+  
   renderUserChips();
 }
 
