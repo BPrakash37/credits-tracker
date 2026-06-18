@@ -362,6 +362,7 @@ document.getElementById('approval-tab-btn').style.display =
 USER_ROLE === 'super_admin'
 ? ''
 : 'none';
+updateApprovalBadge();
 }
 
 function logout() {
@@ -936,6 +937,7 @@ async function approveAdmin(id){
         .eq("id",id);
 
     renderApprovals();
+    updateApprovalBadge();
 
     toast("Admin Approved");
 }
@@ -951,11 +953,30 @@ async function rejectAdmin(id){
         .eq("id",id);
 
     renderApprovals();
+    updateApprovalBadge();
 
     toast("Request Rejected");
 }
 function isViewingOtherUser() {
     return USER_ROLE === "super_admin" && VIEWING_USER;
+}
+async function updateApprovalBadge(){
+
+    if(USER_ROLE !== "super_admin") return;
+
+    const {count,error} = await sb
+        .from("admin_requests")
+        .select("*",{count:"exact",head:true})
+        .eq("status","pending");
+
+    if(error) return;
+
+    const btn = document.getElementById("approval-tab-btn");
+
+    btn.innerHTML =
+        count > 0
+        ? `Approvals 🔴 (${count})`
+        : "Approvals";
 }
 
 // ── CSV ───────────────────────────────────────
