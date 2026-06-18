@@ -367,9 +367,31 @@ function logout() {
 
 // ── Track login ───────────────────────────────
 async function trackLogin(username) {
-  const { data } = await sb.from('app_users').select('login_count').eq('username', username).single();
-  const count = (data?.login_count || 0) + 1;
-  await sb.from('app_users').upsert({ username, last_login: new Date().toISOString(), login_count: count });
+
+    const { data: admin } = await sb
+        .from("admins")
+        .select("role")
+        .eq("username", username)
+        .maybeSingle();
+
+    const role = admin?.role || "user";
+
+    const { data } = await sb
+        .from("app_users")
+        .select("login_count")
+        .eq("username", username)
+        .single();
+
+    const count = (data?.login_count || 0) + 1;
+
+    await sb
+        .from("app_users")
+        .upsert({
+            username,
+            role,
+            login_count: count,
+            last_login: new Date().toISOString()
+        });
 }
 
 // ── DB ────────────────────────────────────────
@@ -465,7 +487,16 @@ function kpi(label, value, color, sub) {
 // ── ADMIN TAB ─────────────────────────────────
 async function renderAdmin() {
   document.getElementById('tab-admin').innerHTML = '<div class="empty">Loading...</div>';
-  const { data, error } = await sb.from('app_users').select('*').order('last_login', { ascending: false });
+  let query = sb
+    .from("app_users")
+    .select("*")
+    .order("last_login",{ascending:false});
+
+if(USER_ROLE==="admin"){
+    query = query.eq("role","user");
+}
+
+const { data, error } = await query;
   if (error) { document.getElementById('tab-admin').innerHTML = '<div class="empty">Error loading users</div>'; return; }
 
   const users = data || [];
