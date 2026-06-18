@@ -545,7 +545,7 @@ function renderBills() {
       </div>
     </div>
     <div class="card">
-      <div class="sec-label">All Bills</div>
+      <div class="sec-label">All Bills — ${STATE.bills.length} entries · ${fmtF(STATE.bills.reduce((sum,b)=>sum + Number(b.current_bill||0) + JSON.parse(b.other_bills||'[]').reduce((s,e)=>s + Number(e.amount||0),0),0))}</div>
       ${sorted.length===0?'<div class="empty">No bills yet</div>':sorted.map(b=>{
         const extras = JSON.parse(b.other_bills||'[]');
         const total = +b.current_bill + extras.reduce((s,o)=>s+ +o.amount,0);
