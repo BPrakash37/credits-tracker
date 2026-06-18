@@ -203,7 +203,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let USERNAME   = null;
-let IS_ADMIN   = false;
+// let IS_ADMIN   = false;
+let USER_ROLE = "user";
 let STATE      = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
 let currentTab = 'dashboard';
 
@@ -243,59 +244,94 @@ function quickLogin(u) {
 // ── STEP 1: Enter username ────────────────────
 async function enterApp() {
   const raw = document.getElementById('username-input').value.trim().toLowerCase();
-  if (!raw) { document.getElementById('auth-error').textContent = 'Please enter a username'; return; }
-  if (raw.length < 2) { document.getElementById('auth-error').textContent = 'Username too short'; return; }
+
+  if (!raw) {
+    document.getElementById('auth-error').textContent = 'Please enter a username';
+    return;
+  }
+
+  if (raw.length < 2) {
+    document.getElementById('auth-error').textContent = 'Username too short';
+    return;
+  }
 
   const btn = document.getElementById('enter-btn');
-  btn.disabled = true; btn.textContent = 'Checking...';
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+
   document.getElementById('auth-error').textContent = '';
 
-  // Check if this username matches admin_username in Supabase
-  const { data } = await sb.from('admin_config')
-    .select('value').eq('key', 'admin_username').single();
+  const { data } = await sb
+      .from('admins')
+      .select('username,role')
+      .eq('username', raw)
+      .maybeSingle();
 
-  if (data && raw === data.value) {
-    // Admin username detected — show password step, don't reveal why
-    USERNAME = raw;
-    document.getElementById('step-username').style.display = 'none';
-    document.getElementById('step-adminpass').style.display = '';
-    document.getElementById('admin-pass-input').focus();
-    btn.disabled = false; btn.textContent = 'Enter →';
+  if (data) {
+
+      USERNAME = raw;
+      USER_ROLE = data.role;
+
+      document.getElementById('step-username').style.display = 'none';
+      document.getElementById('step-adminpass').style.display = '';
+      document.getElementById('admin-pass-input').focus();
+
   } else {
-    // Normal user — go straight in
-    USERNAME = raw;
-    IS_ADMIN = false;
-    saveKnownUser(raw);
-    await trackLogin(raw);
-    await loadAll();
-    launchApp();
-    btn.disabled = false; btn.textContent = 'Enter →';
+
+      USERNAME = raw;
+      USER_ROLE = "user";
+
+      saveKnownUser(raw);
+      await trackLogin(raw);
+      await loadAll();
+      launchApp();
+
   }
+
+  btn.disabled = false;
+  btn.textContent = 'Enter →';
 }
 
 // ── STEP 2: Admin password ────────────────────
 async function submitAdminPass() {
+
   const pass = document.getElementById('admin-pass-input').value;
+
   if (!pass) return;
 
   const btn = document.getElementById('admin-pass-btn');
-  btn.disabled = true; btn.textContent = 'Checking...';
+
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+
   document.getElementById('auth-error').textContent = '';
 
-  const { data } = await sb.from('admin_config')
-    .select('value').eq('key', 'admin_password').single();
+  const { data } = await sb
+      .from('admins')
+      .select('password,role')
+      .eq('username', USERNAME)
+      .single();
 
-  if (data && pass === data.value) {
-    IS_ADMIN = true;
-    saveKnownUser(USERNAME);
-    await trackLogin(USERNAME);
-    await loadAll();
-    launchApp();
+  if (data && pass === data.password) {
+
+      USER_ROLE = data.role;
+
+      saveKnownUser(USERNAME);
+
+      await trackLogin(USERNAME);
+
+      await loadAll();
+
+      launchApp();
+
   } else {
-    document.getElementById('auth-error').textContent = 'Wrong password';
+
+      document.getElementById('auth-error').textContent = 'Wrong password';
+
   }
 
-  btn.disabled = false; btn.textContent = 'Unlock Admin →';
+  btn.disabled = false;
+  btn.textContent = 'Unlock Admin →';
 }
 
 // ── Launch app after auth ─────────────────────
@@ -304,12 +340,15 @@ function launchApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app-screen').className = 'visible';
   // Show admin tab only for admin
-  document.getElementById('admin-tab-btn').style.display = IS_ADMIN ? '' : 'none';
+  document.getElementById('admin-tab-btn').style.display =
+(USER_ROLE === 'admin' || USER_ROLE === 'super_admin')
+? ''
+: 'none';
   renderDashboard();
 }
 
 function logout() {
-  USERNAME = null; IS_ADMIN = false;
+  USERNAME = null; USER_ROLE = "user";
   STATE = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
   document.getElementById('username-input').value = '';
   document.getElementById('admin-pass-input').value = '';
