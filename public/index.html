@@ -181,6 +181,9 @@
       <button class="tab-btn" onclick="switchTab('bills',this)">Bills</button>
       <button class="tab-btn" onclick="switchTab('cc',this)">CC &amp; Inflows</button>
       <button class="tab-btn" id="admin-tab-btn" style="display:none" onclick="switchTab('admin',this)">Admin</button>
+      <button class="tab-btn" id="approval-tab-btn" style="display:none" onclick="switchTab('approvals',this)">
+    Approvals
+</button>
     </div>
   </div>
 
@@ -191,6 +194,7 @@
     <div id="tab-bills" style="display:none"></div>
     <div id="tab-cc" style="display:none"></div>
     <div id="tab-admin" style="display:none"></div>
+    <div id="tab-approvals" style="display:none"></div>
   </div>
 </div>
 
@@ -337,7 +341,15 @@ async function submitAdminPass() {
 
 // ── Launch app after auth ─────────────────────
 function launchApp() {
-  document.getElementById('user-badge').textContent = USERNAME;
+  let badge = USERNAME;
+
+if (USER_ROLE === "super_admin") {
+    badge = "👑 " + USERNAME;
+} else if (USER_ROLE === "admin") {
+    badge = "🛡️ " + USERNAME;
+}
+
+document.getElementById('user-badge').textContent = badge;
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app-screen').className = 'visible';
   // Show admin tab only for admin
@@ -346,6 +358,10 @@ function launchApp() {
 ? ''
 : 'none';
   renderDashboard();
+document.getElementById('approval-tab-btn').style.display =
+USER_ROLE === 'super_admin'
+? ''
+: 'none';
 }
 
 function logout() {
@@ -416,7 +432,7 @@ async function loadAll() {
 }
 
 // ── Tabs ──────────────────────────────────────
-const TABS = ['dashboard','credits','disbursements','bills','cc','admin'];
+const TABS = ['dashboard','credits','disbursements','bills','cc','admin','approvals'];
 function switchTab(name, btn) {
   TABS.forEach(t => document.getElementById('tab-'+t).style.display = t===name?'':'none');
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -431,6 +447,7 @@ function renderTab(n) {
   if(n==='bills')         renderBills();
   if(n==='cc')            renderCC();
   if(n==='admin')         renderAdmin();
+  if(n==='approvals') renderApprovals();
 }
 
 // ── DASHBOARD ─────────────────────────────────
@@ -795,6 +812,150 @@ async function exitUserView(){
     );
 
     toast("Returned to your dashboard");
+}
+async function renderApprovals(){
+
+    const {data:requests,error}=await sb
+        .from("admin_requests")
+        .select("*")
+        .eq("status","pending")
+        .order("requested_at",{ascending:false});
+
+    document.getElementById("tab-approvals").innerHTML=`
+
+    <div class="card">
+
+        <div class="sec-label">
+
+            Pending Admin Requests (${requests.length})
+
+        </div>
+
+        ${
+        requests.length===0
+
+        ?
+
+        `<div class="empty">
+
+            No Pending Requests
+
+        </div>`
+
+        :
+
+        requests.map(r=>`
+
+        <div class="user-row">
+
+            <div class="user-info">
+
+                <div class="user-name">
+
+                    ${r.username}
+
+                </div>
+
+                <div class="user-meta-text">
+
+                    Requested:
+                    ${new Date(r.requested_at).toLocaleString()}
+
+                </div>
+
+            </div>
+
+            <button
+            class="btn-add btn-green"
+            onclick="approveAdmin(${r.id})">
+
+            Approve
+
+            </button>
+
+            <button
+            class="btn-add btn-red"
+            onclick="rejectAdmin(${r.id})">
+
+            Reject
+
+            </button>
+
+        </div>
+
+        `).join("")
+        }
+
+    </div>
+    `;
+}
+async function approveAdmin(id){
+
+    const {data:req,error}=await sb
+        .from("admin_requests")
+        .select("*")
+        .eq("id",id)
+        .single();
+
+    if(error){
+        toast(error.message,true);
+        return;
+    }
+
+    const {data:exists}=await sb
+        .from("admins")
+        .select("id")
+        .eq("username",req.username)
+        .maybeSingle();
+
+    if(exists){
+        toast("Already an admin",true);
+        return;
+    }
+
+    const {error:insertError}=await sb
+        .from("admins")
+        .insert({
+            username:req.username,
+            password:req.password,
+            role:"admin"
+        });
+
+    if(insertError){
+        toast(insertError.message,true);
+        return;
+    }
+
+    await sb
+        .from("admin_requests")
+        .update({
+            status:"approved",
+            approved_by:USERNAME,
+            approved_at:new Date().toISOString()
+        })
+        .eq("id",id);
+
+    renderApprovals();
+
+    toast("Admin Approved");
+}
+async function rejectAdmin(id){
+
+    await sb
+        .from("admin_requests")
+        .update({
+            status:"rejected",
+            approved_by:USERNAME,
+            approved_at:new Date().toISOString()
+        })
+        .eq("id",id);
+
+    renderApprovals();
+
+    toast("Request Rejected");
+}
+function isViewingOtherUser() {
+    return USER_ROLE === "super_admin" && VIEWING_USER;
 }
 
 // ── CSV ───────────────────────────────────────
