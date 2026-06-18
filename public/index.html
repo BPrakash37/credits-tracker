@@ -205,6 +205,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let USERNAME   = null;
 // let IS_ADMIN   = false;
 let USER_ROLE = "user";
+let VIEWING_USER = null;
 let STATE      = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
 let currentTab = 'dashboard';
 
@@ -395,7 +396,7 @@ async function trackLogin(username) {
 }
 
 // ── DB ────────────────────────────────────────
-const uid = () => USERNAME;
+const uid = () => VIEWING_USER || USERNAME;
 
 async function loadAll() {
   const [c, d, b, cc, inf, meta] = await Promise.all([
@@ -448,6 +449,21 @@ function renderDashboard() {
   const maxM = Math.max(...months.map(([,v])=>v), 1);
 
   document.getElementById('tab-dashboard').innerHTML = `
+    ${USER_ROLE==="super_admin" && VIEWING_USER ? `
+    <div class="card card-blue" style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+                <b>Viewing Dashboard:</b> ${VIEWING_USER}
+            </div>
+
+            <button
+                class="btn-add btn-blue"
+                onclick="exitUserView()">
+                Back To My Dashboard
+            </button>
+        </div>
+    </div>
+    ` : ""}
     <div class="grid2" style="margin-bottom:14px">
       ${kpi('Total Credits', fmt(tC), 'var(--green)', STATE.credits.length+' transactions')}
       ${kpi('Disbursed', fmt(tD), 'var(--red)', 'paid out')}
@@ -521,9 +537,27 @@ const { data, error } = await query;
             <div class="user-meta-text">Joined: ${joined} · Last seen: ${lastLogin}</div>
           </div>
           <div class="user-stats">
-            <div class="user-stat-val">${u.login_count || 1}</div>
-            <div class="user-stat-lbl">logins</div>
-          </div>
+
+    <div class="user-stat-val">
+        ${u.login_count || 1}
+    </div>
+
+    <div class="user-stat-lbl">
+        logins
+    </div>
+
+    ${USER_ROLE==="super_admin" ? `
+        <button
+            class="btn-sm"
+            style="margin-top:6px"
+            onclick="viewUser('${u.username}')">
+
+            View Dashboard
+
+        </button>
+    ` : ""}
+
+</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -725,6 +759,42 @@ async function del(table, id) {
   if(table==='cc_bills')      STATE.ccBills       = STATE.ccBills.filter(r=>r.id!=id);
   if(table==='inflows')       STATE.inflows       = STATE.inflows.filter(r=>r.id!=id);
   renderTab(currentTab); renderDashboard(); toast('Deleted');
+}
+async function viewUser(username){
+
+    if(USER_ROLE !== "super_admin"){
+        toast("Access Denied", true);
+        return;
+    }
+
+    VIEWING_USER = username;
+
+    await loadAll();
+
+    renderDashboard();
+
+    switchTab(
+        "dashboard",
+        document.querySelector(".tab-btn")
+    );
+
+    toast("Viewing " + username);
+}
+
+async function exitUserView(){
+
+    VIEWING_USER = null;
+
+    await loadAll();
+
+    renderDashboard();
+
+    switchTab(
+        "dashboard",
+        document.querySelector(".tab-btn")
+    );
+
+    toast("Returned to your dashboard");
 }
 
 // ── CSV ───────────────────────────────────────
