@@ -546,7 +546,7 @@ const { data, error } = await query;
         logins
     </div>
 
-    ${USER_ROLE==="super_admin" ? `
+    ${USER_ROLE==="super_admin" && u.username !== USERNAME ? `
         <button
             class="btn-sm"
             style="margin-top:6px"
