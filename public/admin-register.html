@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+
+    <title>Request Admin Access</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+
+            background: #0e0f13;
+
+            font-family: Arial, Helvetica, sans-serif;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            height: 100vh;
+
+            color: #fff;
+
+        }
+
+        .card {
+
+            width: 400px;
+
+            background: #16181f;
+
+            border: 1px solid #252830;
+
+            border-radius: 14px;
+
+            padding: 28px;
+
+        }
+
+        h2 {
+
+            margin-bottom: 8px;
+
+        }
+
+        p {
+
+            color: #999;
+
+            margin-bottom: 25px;
+
+            font-size: 14px;
+
+        }
+
+        input {
+
+            width: 100%;
+
+            padding: 12px;
+
+            margin-bottom: 14px;
+
+            border-radius: 8px;
+
+            border: 1px solid #333;
+
+            background: #1d1f28;
+
+            color: white;
+
+            font-size: 15px;
+
+        }
+
+        input:focus {
+
+            outline: none;
+
+            border-color: #3de89a;
+
+        }
+
+        button {
+
+            width: 100%;
+
+            padding: 12px;
+
+            border: none;
+
+            border-radius: 8px;
+
+            cursor: pointer;
+
+            font-size: 15px;
+
+            font-weight: bold;
+
+            margin-top: 5px;
+
+        }
+
+        .primary {
+
+            background: #3de89a;
+
+            color: #000;
+
+        }
+
+        .secondary {
+
+            margin-top: 12px;
+
+            background: #333;
+
+            color: white;
+
+        }
+
+        .msg {
+
+            margin-top: 15px;
+
+            text-align: center;
+
+            font-size: 14px;
+
+        }
+
+        .success {
+
+            color: #3de89a;
+
+        }
+
+        .error {
+
+            color: #ff6b6b;
+
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="card">
+
+        <h2>Request Admin Access</h2>
+
+        <p>
+            Your request will be reviewed by the Super Admin.
+        </p>
+
+        <input id="username" placeholder="Username">
+
+        <input id="password" type="password" placeholder="Password">
+
+        <input id="confirm" type="password" placeholder="Confirm Password">
+
+        <button class="primary" onclick="submitRequest()">
+
+            Submit Request
+
+        </button>
+
+        <button class="secondary" onclick="location.href='index.html'">
+
+            Back
+
+        </button>
+
+        <div id="msg" class="msg">
+
+        </div>
+
+    </div>
+
+    <script>
+
+        const SUPABASE_URL      = 'https://xvtbmxtstejldgsjzdft.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2dGJteHRzdGVqbGRnc2p6ZGZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzM1NzAsImV4cCI6MjA5NzI0OTU3MH0.ointE-k7Few1JKkZNaCjwLZSePKII1sWyn_KaznTF_8';
+
+        const sb = supabase.createClient(
+            SUPABASE_URL,
+            SUPABASE_ANON_KEY
+        );
+
+        async function submitRequest() {
+
+            const username = document.getElementById("username")
+                .value
+                .trim()
+                .toLowerCase();
+
+            const password = document.getElementById("password").value;
+
+            const confirm = document.getElementById("confirm").value;
+
+            const msg = document.getElementById("msg");
+
+            msg.className = "msg";
+            msg.innerHTML = "";
+
+            if (!username || !password) {
+
+                msg.classList.add("error");
+
+                msg.innerHTML = "Please fill all fields.";
+
+                return;
+
+            }
+
+            if (password !== confirm) {
+
+                msg.classList.add("error");
+
+                msg.innerHTML = "Passwords do not match.";
+
+                return;
+
+            }
+
+            // already admin?
+
+            const { data: admin } = await sb
+
+                .from("admins")
+
+                .select("id")
+
+                .eq("username", username)
+
+                .maybeSingle();
+
+            if (admin) {
+
+                msg.classList.add("error");
+
+                msg.innerHTML = "Username already exists.";
+
+                return;
+
+            }
+
+            // already requested?
+
+            const { data: req } = await sb
+
+                .from("admin_requests")
+
+                .select("id")
+
+                .eq("username", username)
+
+                .eq("status", "pending")
+
+                .maybeSingle();
+
+            if (req) {
+
+                msg.classList.add("error");
+
+                msg.innerHTML = "Request already submitted.";
+
+                return;
+
+            }
+
+            // insert request
+
+            const { error } = await sb
+
+                .from("admin_requests")
+
+                .insert({
+
+                    username,
+
+                    password,
+
+                    status: "pending"
+
+                });
+
+            if (error) {
+
+                msg.classList.add("error");
+
+                msg.innerHTML = error.message;
+
+                return;
+
+            }
+
+            msg.classList.add("success");
+
+            msg.innerHTML = "✅ Request submitted successfully.<br>Wait for approval.";
+
+            document.getElementById("username").value = "";
+            document.getElementById("password").value = "";
+            document.getElementById("confirm").value = "";
+
+        }
+
+    </script>
+
+</body>
+
+</html>

@@ -181,6 +181,9 @@
       <button class="tab-btn" onclick="switchTab('bills',this)">Bills</button>
       <button class="tab-btn" onclick="switchTab('cc',this)">CC &amp; Inflows</button>
       <button class="tab-btn" id="admin-tab-btn" style="display:none" onclick="switchTab('admin',this)">Admin</button>
+      <button class="tab-btn" id="approval-tab-btn" style="display:none" onclick="switchTab('approvals',this)">
+    Approvals
+</button>
     </div>
   </div>
 
@@ -191,6 +194,7 @@
     <div id="tab-bills" style="display:none"></div>
     <div id="tab-cc" style="display:none"></div>
     <div id="tab-admin" style="display:none"></div>
+    <div id="tab-approvals" style="display:none"></div>
   </div>
 </div>
 
@@ -203,7 +207,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let USERNAME   = null;
-let IS_ADMIN   = false;
+// let IS_ADMIN   = false;
+let USER_ROLE = "user";
+let VIEWING_USER = null;
 let STATE      = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
 let currentTab = 'dashboard';
 
@@ -243,73 +249,124 @@ function quickLogin(u) {
 // ── STEP 1: Enter username ────────────────────
 async function enterApp() {
   const raw = document.getElementById('username-input').value.trim().toLowerCase();
-  if (!raw) { document.getElementById('auth-error').textContent = 'Please enter a username'; return; }
-  if (raw.length < 2) { document.getElementById('auth-error').textContent = 'Username too short'; return; }
+
+  if (!raw) {
+    document.getElementById('auth-error').textContent = 'Please enter a username';
+    return;
+  }
+
+  if (raw.length < 2) {
+    document.getElementById('auth-error').textContent = 'Username too short';
+    return;
+  }
 
   const btn = document.getElementById('enter-btn');
-  btn.disabled = true; btn.textContent = 'Checking...';
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+
   document.getElementById('auth-error').textContent = '';
 
-  // Check if this username matches admin_username in Supabase
-  const { data } = await sb.from('admin_config')
-    .select('value').eq('key', 'admin_username').single();
+  const { data } = await sb
+      .from('admins')
+      .select('username,role')
+      .eq('username', raw)
+      .maybeSingle();
 
-  if (data && raw === data.value) {
-    // Admin username detected — show password step, don't reveal why
-    USERNAME = raw;
-    document.getElementById('step-username').style.display = 'none';
-    document.getElementById('step-adminpass').style.display = '';
-    document.getElementById('admin-pass-input').focus();
-    btn.disabled = false; btn.textContent = 'Enter →';
+  if (data) {
+
+      USERNAME = raw;
+      USER_ROLE = data.role;
+
+      document.getElementById('step-username').style.display = 'none';
+      document.getElementById('step-adminpass').style.display = '';
+      document.getElementById('admin-pass-input').focus();
+
   } else {
-    // Normal user — go straight in
-    USERNAME = raw;
-    IS_ADMIN = false;
-    saveKnownUser(raw);
-    await trackLogin(raw);
-    await loadAll();
-    launchApp();
-    btn.disabled = false; btn.textContent = 'Enter →';
+
+      USERNAME = raw;
+      USER_ROLE = "user";
+
+      saveKnownUser(raw);
+      await trackLogin(raw);
+      await loadAll();
+      launchApp();
+
   }
+
+  btn.disabled = false;
+  btn.textContent = 'Enter →';
 }
 
 // ── STEP 2: Admin password ────────────────────
 async function submitAdminPass() {
+
   const pass = document.getElementById('admin-pass-input').value;
+
   if (!pass) return;
 
   const btn = document.getElementById('admin-pass-btn');
-  btn.disabled = true; btn.textContent = 'Checking...';
+
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+
   document.getElementById('auth-error').textContent = '';
 
-  const { data } = await sb.from('admin_config')
-    .select('value').eq('key', 'admin_password').single();
+  const { data } = await sb
+      .from('admins')
+      .select('password,role')
+      .eq('username', USERNAME)
+      .single();
 
-  if (data && pass === data.value) {
-    IS_ADMIN = true;
-    saveKnownUser(USERNAME);
-    await trackLogin(USERNAME);
-    await loadAll();
-    launchApp();
+  if (data && pass === data.password) {
+
+      USER_ROLE = data.role;
+
+      saveKnownUser(USERNAME);
+
+      await trackLogin(USERNAME);
+
+      await loadAll();
+
+      launchApp();
+
   } else {
-    document.getElementById('auth-error').textContent = 'Wrong password';
+
+      document.getElementById('auth-error').textContent = 'Wrong password';
+
   }
 
-  btn.disabled = false; btn.textContent = 'Unlock Admin →';
+  btn.disabled = false;
+  btn.textContent = 'Unlock Admin →';
 }
 
 // ── Launch app after auth ─────────────────────
 function launchApp() {
-  document.getElementById('user-badge').textContent = USERNAME;
+  let badge = USERNAME;
+
+if (USER_ROLE === "super_admin") {
+    badge = "👑 " + USERNAME;
+} else if (USER_ROLE === "admin") {
+    badge = "🛡️ " + USERNAME;
+}
+
+document.getElementById('user-badge').textContent = badge;
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app-screen').className = 'visible';
   // Show admin tab only for admin
-  document.getElementById('admin-tab-btn').style.display = IS_ADMIN ? '' : 'none';
+  document.getElementById('admin-tab-btn').style.display =
+(USER_ROLE === 'admin' || USER_ROLE === 'super_admin')
+? ''
+: 'none';
   renderDashboard();
+document.getElementById('approval-tab-btn').style.display =
+USER_ROLE === 'super_admin'
+? ''
+: 'none';
+updateApprovalBadge();
 }
 
 function logout() {
-  USERNAME = null; IS_ADMIN = false;
+  USERNAME = null; USER_ROLE = "user";
   STATE = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
   document.getElementById('username-input').value = '';
   document.getElementById('admin-pass-input').value = '';
@@ -328,13 +385,35 @@ function logout() {
 
 // ── Track login ───────────────────────────────
 async function trackLogin(username) {
-  const { data } = await sb.from('app_users').select('login_count').eq('username', username).single();
-  const count = (data?.login_count || 0) + 1;
-  await sb.from('app_users').upsert({ username, last_login: new Date().toISOString(), login_count: count });
+
+    const { data: admin } = await sb
+        .from("admins")
+        .select("role")
+        .eq("username", username)
+        .maybeSingle();
+
+    const role = admin?.role || "user";
+
+    const { data } = await sb
+        .from("app_users")
+        .select("login_count")
+        .eq("username", username)
+        .single();
+
+    const count = (data?.login_count || 0) + 1;
+
+    await sb
+        .from("app_users")
+        .upsert({
+            username,
+            role,
+            login_count: count,
+            last_login: new Date().toISOString()
+        });
 }
 
 // ── DB ────────────────────────────────────────
-const uid = () => USERNAME;
+const uid = () => VIEWING_USER || USERNAME;
 
 async function loadAll() {
   const [c, d, b, cc, inf, meta] = await Promise.all([
@@ -354,7 +433,7 @@ async function loadAll() {
 }
 
 // ── Tabs ──────────────────────────────────────
-const TABS = ['dashboard','credits','disbursements','bills','cc','admin'];
+const TABS = ['dashboard','credits','disbursements','bills','cc','admin','approvals'];
 function switchTab(name, btn) {
   TABS.forEach(t => document.getElementById('tab-'+t).style.display = t===name?'':'none');
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -369,6 +448,7 @@ function renderTab(n) {
   if(n==='bills')         renderBills();
   if(n==='cc')            renderCC();
   if(n==='admin')         renderAdmin();
+  if(n==='approvals') renderApprovals();
 }
 
 // ── DASHBOARD ─────────────────────────────────
@@ -387,6 +467,21 @@ function renderDashboard() {
   const maxM = Math.max(...months.map(([,v])=>v), 1);
 
   document.getElementById('tab-dashboard').innerHTML = `
+    ${USER_ROLE==="super_admin" && VIEWING_USER ? `
+    <div class="card card-blue" style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+                <b>Viewing Dashboard:</b> ${VIEWING_USER}
+            </div>
+
+            <button
+                class="btn-add btn-blue"
+                onclick="exitUserView()">
+                Back To My Dashboard
+            </button>
+        </div>
+    </div>
+    ` : ""}
     <div class="grid2" style="margin-bottom:14px">
       ${kpi('Total Credits', fmt(tC), 'var(--green)', STATE.credits.length+' transactions')}
       ${kpi('Disbursed', fmt(tD), 'var(--red)', 'paid out')}
@@ -426,7 +521,16 @@ function kpi(label, value, color, sub) {
 // ── ADMIN TAB ─────────────────────────────────
 async function renderAdmin() {
   document.getElementById('tab-admin').innerHTML = '<div class="empty">Loading...</div>';
-  const { data, error } = await sb.from('app_users').select('*').order('last_login', { ascending: false });
+  let query = sb
+    .from("app_users")
+    .select("*")
+    .order("last_login",{ascending:false});
+
+if(USER_ROLE==="admin"){
+    query = query.eq("role","user");
+}
+
+const { data, error } = await query;
   if (error) { document.getElementById('tab-admin').innerHTML = '<div class="empty">Error loading users</div>'; return; }
 
   const users = data || [];
@@ -451,9 +555,27 @@ async function renderAdmin() {
             <div class="user-meta-text">Joined: ${joined} · Last seen: ${lastLogin}</div>
           </div>
           <div class="user-stats">
-            <div class="user-stat-val">${u.login_count || 1}</div>
-            <div class="user-stat-lbl">logins</div>
-          </div>
+
+    <div class="user-stat-val">
+        ${u.login_count || 1}
+    </div>
+
+    <div class="user-stat-lbl">
+        logins
+    </div>
+
+    ${USER_ROLE==="super_admin" && u.username !== USERNAME ? `
+        <button
+            class="btn-sm"
+            style="margin-top:6px"
+            onclick="viewUser('${u.username}')">
+
+            View Dashboard
+
+        </button>
+    ` : ""}
+
+</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -655,6 +777,206 @@ async function del(table, id) {
   if(table==='cc_bills')      STATE.ccBills       = STATE.ccBills.filter(r=>r.id!=id);
   if(table==='inflows')       STATE.inflows       = STATE.inflows.filter(r=>r.id!=id);
   renderTab(currentTab); renderDashboard(); toast('Deleted');
+}
+async function viewUser(username){
+
+    if(USER_ROLE !== "super_admin"){
+        toast("Access Denied", true);
+        return;
+    }
+
+    VIEWING_USER = username;
+
+    await loadAll();
+
+    renderDashboard();
+
+    switchTab(
+        "dashboard",
+        document.querySelector(".tab-btn")
+    );
+
+    toast("Viewing " + username);
+}
+
+async function exitUserView(){
+
+    VIEWING_USER = null;
+
+    await loadAll();
+
+    renderDashboard();
+
+    switchTab(
+        "dashboard",
+        document.querySelector(".tab-btn")
+    );
+
+    toast("Returned to your dashboard");
+}
+async function renderApprovals(){
+
+    const {data:requests,error}=await sb
+        .from("admin_requests")
+        .select("*")
+        .eq("status","pending")
+        .order("requested_at",{ascending:false});
+
+    document.getElementById("tab-approvals").innerHTML=`
+
+    <div class="card">
+
+        <div class="sec-label">
+
+            Pending Admin Requests (${requests.length})
+
+        </div>
+
+        ${
+        requests.length===0
+
+        ?
+
+        `<div class="empty">
+
+            No Pending Requests
+
+        </div>`
+
+        :
+
+        requests.map(r=>`
+
+        <div class="user-row">
+
+            <div class="user-info">
+
+                <div class="user-name">
+
+                    ${r.username}
+
+                </div>
+
+                <div class="user-meta-text">
+
+                    Requested:
+                    ${new Date(r.requested_at).toLocaleString()}
+
+                </div>
+
+            </div>
+
+            <button
+            class="btn-add btn-green"
+            onclick="approveAdmin(${r.id})">
+
+            Approve
+
+            </button>
+
+            <button
+            class="btn-add btn-red"
+            onclick="rejectAdmin(${r.id})">
+
+            Reject
+
+            </button>
+
+        </div>
+
+        `).join("")
+        }
+
+    </div>
+    `;
+}
+async function approveAdmin(id){
+
+    const {data:req,error}=await sb
+        .from("admin_requests")
+        .select("*")
+        .eq("id",id)
+        .single();
+
+    if(error){
+        toast(error.message,true);
+        return;
+    }
+
+    const {data:exists}=await sb
+        .from("admins")
+        .select("id")
+        .eq("username",req.username)
+        .maybeSingle();
+
+    if(exists){
+        toast("Already an admin",true);
+        return;
+    }
+
+    const {error:insertError}=await sb
+        .from("admins")
+        .insert({
+            username:req.username,
+            password:req.password,
+            role:"admin"
+        });
+
+    if(insertError){
+        toast(insertError.message,true);
+        return;
+    }
+
+    await sb
+        .from("admin_requests")
+        .update({
+            status:"approved",
+            approved_by:USERNAME,
+            approved_at:new Date().toISOString()
+        })
+        .eq("id",id);
+
+    renderApprovals();
+    updateApprovalBadge();
+
+    toast("Admin Approved");
+}
+async function rejectAdmin(id){
+
+    await sb
+        .from("admin_requests")
+        .update({
+            status:"rejected",
+            approved_by:USERNAME,
+            approved_at:new Date().toISOString()
+        })
+        .eq("id",id);
+
+    renderApprovals();
+    updateApprovalBadge();
+
+    toast("Request Rejected");
+}
+function isViewingOtherUser() {
+    return USER_ROLE === "super_admin" && VIEWING_USER;
+}
+async function updateApprovalBadge(){
+
+    if(USER_ROLE !== "super_admin") return;
+
+    const {count,error} = await sb
+        .from("admin_requests")
+        .select("*",{count:"exact",head:true})
+        .eq("status","pending");
+
+    if(error) return;
+
+    const btn = document.getElementById("approval-tab-btn");
+
+    btn.innerHTML =
+        count > 0
+        ? `Approvals 🔴 (${count})`
+        : "Approvals";
 }
 
 // ── CSV ───────────────────────────────────────
