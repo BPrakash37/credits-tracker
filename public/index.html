@@ -376,7 +376,7 @@ updateApprovalBadge();
 
 function logout() {
   USERNAME = null; USER_ROLE = "user";
-  STATE = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
+  STATE = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], bankAccounts:[] };
   document.getElementById('username-input').value = '';
   document.getElementById('admin-pass-input').value = '';
   document.getElementById('auth-error').textContent = '';
@@ -431,14 +431,14 @@ async function loadAll() {
     sb.from('bills').select('*').eq('user_id', uid()).order('month'),
     sb.from('cc_bills').select('*').eq('user_id', uid()),
     sb.from('inflows').select('*').eq('user_id', uid()),
-    sb.from('user_meta').select('*').eq('user_id', uid()),
+    sb.from('bank_accounts').select('*').eq('user_id', uid()),
   ]);
   STATE.credits       = c.data || [];
   STATE.disbursements = d.data || [];
   STATE.bills         = b.data || [];
   STATE.ccBills       = cc.data || [];
   STATE.inflows       = inf.data || [];
-  STATE.sliceBalance  = meta.data?.[0]?.slice_balance || 0;
+  STATE.bankAccounts = bank.data || [];
 }
 
 // ── Tabs ──────────────────────────────────────
@@ -467,7 +467,8 @@ function renderDashboard() {
   const tCC = STATE.ccBills.reduce((s,c)=>s+ +c.amount,0);
   const tI  = STATE.inflows.reduce((s,i)=>s+ +i.amount,0);
   const rem = tC - tD;
-  const net = STATE.sliceBalance + tI - tCC;
+  const totalBanks = STATE.bankAccounts.reduce((s,a) => s + +a.balance, 0);
+  const net = totalBanks + tI - tCC;
   const debt = rem - net;
 
   const monthly = {};
@@ -509,7 +510,12 @@ function renderDashboard() {
     </div>
     <div class="card">
       <div class="sec-label">Net Position</div>
-      <div class="net-row"><span style="color:var(--muted)">Slice Balance</span><span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(STATE.sliceBalance)}</span></div>
+      // replace with a loop:
+      ${STATE.bankAccounts.map(a => `
+      <div class="net-row">
+      <span style="color:var(--muted)">${a.name}</span>
+      <span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(+a.balance)}</span>
+      </div>`).join('')}
       <div class="net-row"><span style="color:var(--muted)">Inflows</span><span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(tI)}</span></div>
       <div class="net-row"><span style="color:var(--muted)">CC Bills</span><span style="font-family:var(--mono);color:var(--red)">− ${fmtF(tCC)}</span></div>
       <div class="net-final">
@@ -610,7 +616,9 @@ function renderCredits() {
           <span class="d-date">${c.date}</span>
           <span class="d-note">${c.note||'—'}</span>
           <span class="pill p-green">${fmt(+c.amount)}</span>
+          <button class="del" onclick="editRow('credits','${c.id}')" id="edit-credits-${c.id}">✎</button>
           <button class="del" onclick="del('credits','${c.id}')">✕</button>
+          
         </div>`).join('')}
     </div>`;
 }
@@ -744,12 +752,26 @@ function renderCC() {
               <button class="del" onclick="del('inflows','${i.id}')">✕</button>
             </div>`).join('')}
         </div>
+        <div class="card card-yellow">
+        <div class="sec-label">Add Bank Account</div>
+        <div class="form-row">
+        <div class="f"><label>Bank Name</label>
+        <input type="text" id="bank-name" placeholder="e.g. IOB, HSBC, Slice"/></div>
+        <div class="f"><label>Balance (₹)</label>
+        <input type="number" id="bank-bal" placeholder="50000"/></div>
+        <button class="btn-add btn-yellow" onclick="addBankAccount()">Add</button>
+        </div>
+        </div>
         <div class="card">
-          <div class="sec-label">Slice Balance (₹)</div>
-          <div style="display:flex;gap:8px">
-            <input type="number" id="slice-val" value="${STATE.sliceBalance}" style="flex:1"/>
-            <button class="btn-add btn-yellow" onclick="saveSlice()">Save</button>
-          </div>
+        <div class="sec-label">Bank Accounts · ${fmt(totalBanks)}</div>
+        ${STATE.bankAccounts.length===0 ? '<div class="empty">No accounts added</div>' :
+        STATE.bankAccounts.map(a => `
+        <div class="data-row" id="bank-row-${a.id}">
+        <span class="d-name">${a.name}</span>
+        <span class="pill p-yellow">${fmt(+a.balance)}</span>
+        <button class="del" onclick="editBankRow('${a.id}','${a.name}',${a.balance})">✎</button>
+        <button class="del" onclick="del('bank_accounts','${a.id}')">✕</button>
+        </div>`).join('')}
         </div>
       </div>
     </div>`;
@@ -770,11 +792,70 @@ async function addInflow() {
   if (error) { toast('Error: '+error.message, true); return; }
   STATE.inflows.push(data); renderCC(); renderDashboard(); toast('Added ✓');
 }
-async function saveSlice() {
-  const val = parseFloat(document.getElementById('slice-val').value)||0;
-  STATE.sliceBalance = val;
-  await sb.from('user_meta').upsert({ user_id:uid(), slice_balance:val });
-  renderDashboard(); toast('Slice balance updated ✓');
+// async function saveSlice() {
+//   const val = parseFloat(document.getElementById('slice-val').value)||0;
+//   STATE.sliceBalance = val;
+//   await sb.from('user_meta').upsert({ user_id:uid(), slice_balance:val });
+//   renderDashboard(); toast('Slice balance updated ✓');
+// }
+function editRow(table, id) {
+const item = STATE[table === 'credits' ? 'credits'
+: table === 'disbursements' ? 'disbursements' : table]
+.find(r => r.id == id);
+if (!item) return;
+const row = document.getElementById('edit-'+table+'-'+id).closest('.data-row');
+// credits fields:
+if (table === 'credits') {
+row.innerHTML = `
+<input type="date" value="${item.date}" id="er-date-${id}" style="width:130px"/>
+<input type="number" value="${item.amount}" id="er-amt-${id}" style="width:110px"/>
+<input type="text" value="${item.note||''}" id="er-note-${id}" style="flex:1" placeholder="Note"/>
+<button class="btn-add btn-green" onclick="saveRowEdit('credits','${id}')">Save</button>
+<button class="del" onclick="renderCredits()">Cancel</button>`;
+}
+// add similar blocks for disbursements (date+name+amount+note)
+}
+async function saveRowEdit(table, id) {
+const updates = {};
+if (table === 'credits') {
+updates.date = document.getElementById('er-date-'+id).value;
+updates.amount = parseFloat(document.getElementById('er-amt-'+id).value);
+updates.note = document.getElementById('er-note-'+id).value.trim();
+}
+if (!updates.amount) { toast('Amount required', true); return; }
+const { error } = await sb.from(table).update(updates).eq('id', id);
+if (error) { toast(error.message, true); return; }
+Object.assign(STATE.credits.find(r=>r.id==id)||{}, updates);
+renderTab(currentTab); renderDashboard(); toast('Updated ✓');
+}
+async function addBankAccount() {
+const name = document.getElementById('bank-name').value.trim();
+const balance = parseFloat(document.getElementById('bank-bal').value);
+if (!name || isNaN(balance)) { toast('Fill bank name and balance', true); return; }
+const { data, error } = await sb.from('bank_accounts')
+.insert({ user_id: uid(), name, balance }).select().single();
+if (error) { toast('Error: '+error.message, true); return; }
+STATE.bankAccounts.push(data);
+renderCC(); renderDashboard(); toast('Bank account added ✓');
+}
+function editBankRow(id, name, balance) {
+const row = document.getElementById('bank-row-'+id);
+row.innerHTML = `
+<input type="text" value="${name}" id="be-name-${id}" style="flex:1;max-width:140px"/>
+<input type="number" value="${balance}" id="be-bal-${id}" style="flex:1;max-width:120px"/>
+<button class="btn-add btn-yellow" onclick="saveBankEdit('${id}')">Save</button>
+<button class="del" onclick="renderCC()">Cancel</button>`;
+}
+async function saveBankEdit(id) {
+const name = document.getElementById('be-name-'+id).value.trim();
+const balance = parseFloat(document.getElementById('be-bal-'+id).value);
+if (!name || isNaN(balance)) { toast('Fill both fields', true); return; }
+const { error } = await sb.from('bank_accounts')
+.update({ name, balance }).eq('id', id);
+if (error) { toast('Error: '+error.message, true); return; }
+const acc = STATE.bankAccounts.find(a => a.id == id);
+if (acc) { acc.name = name; acc.balance = balance; }
+renderCC(); renderDashboard(); toast('Updated ✓');
 }
 
 // ── DELETE ────────────────────────────────────
