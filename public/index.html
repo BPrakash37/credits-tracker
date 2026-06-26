@@ -400,13 +400,10 @@ function renderDashboard() {
   const maxM = Math.max(...months.map(([,v])=>v), 1);
 
   // FIX: removed stray JS comment that was rendering as visible text in the HTML
-  const bankRows = STATE.bankAccounts.length === 0
-    ? `<div class="net-row"><span style="color:var(--muted)">No bank accounts added</span><span style="font-family:var(--mono);color:var(--muted)">₹0</span></div>`
-    : STATE.bankAccounts.map(a => `
-        <div class="net-row">
-          <span style="color:var(--muted)">${a.name}</span>
-          <span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(+a.balance)}</span>
-        </div>`).join('');
+  const bankRows = `<div class="net-row">
+  <span style="color:var(--muted)">Bank Accounts</span>
+  <span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(totalBanks)}</span>
+</div>`;
 
   document.getElementById('tab-dashboard').innerHTML = `
     ${USER_ROLE==="super_admin" && VIEWING_USER ? `
