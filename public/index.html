@@ -1,13 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2QYNGG2NH3"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-2QYNGG2NH3');
 </script>
 <meta charset="UTF-8" />
@@ -40,7 +38,6 @@
   .auth-error { color:var(--red); font-size:12px; margin-top:10px; text-align:center; min-height:18px; }
   .auth-hint { color:var(--muted); font-size:11px; text-align:center; margin-top:16px; line-height:1.6; }
 
-  /* admin password step */
   .admin-pass-box { margin-top:16px; }
   .admin-pass-box input { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px; color:var(--text); font-family:var(--sans); font-size:16px; padding:14px 16px; outline:none; margin-bottom:10px; }
   .admin-pass-box input:focus { border-color:var(--blue); }
@@ -104,6 +101,8 @@
   .p-yellow { background:#f5c84222; color:var(--yellow); }
   .del { background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:10px; padding:2px 7px; cursor:pointer; flex-shrink:0; }
   .del:hover { border-color:var(--red); color:var(--red); }
+  .edit-btn { background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:10px; padding:2px 7px; cursor:pointer; flex-shrink:0; }
+  .edit-btn:hover { border-color:var(--blue); color:var(--blue); }
 
   .bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
   .bar-lbl { font-family:var(--mono); font-size:10px; color:var(--muted); width:40px; flex-shrink:0; }
@@ -139,7 +138,6 @@
     <div class="auth-title">Credits Tracker</div>
     <div class="auth-sub">Enter your username to load your data.<br/>New username = new account, automatically.</div>
 
-    <!-- Step 1: username -->
     <div id="step-username">
       <label class="auth-label">Your Username</label>
       <input class="auth-input" type="text" id="username-input"
@@ -149,7 +147,6 @@
       <button class="auth-btn" id="enter-btn" onclick="enterApp()">Enter →</button>
     </div>
 
-    <!-- Step 2: admin password (hidden by default) -->
     <div id="step-adminpass" style="display:none">
       <label class="auth-label">Admin Password</label>
       <div class="admin-pass-box">
@@ -190,9 +187,7 @@
       <button class="tab-btn" onclick="switchTab('bills',this)">Bills</button>
       <button class="tab-btn" onclick="switchTab('cc',this)">CC &amp; Inflows</button>
       <button class="tab-btn" id="admin-tab-btn" style="display:none" onclick="switchTab('admin',this)">Admin</button>
-      <button class="tab-btn" id="approval-tab-btn" style="display:none" onclick="switchTab('approvals',this)">
-    Approvals
-</button>
+      <button class="tab-btn" id="approval-tab-btn" style="display:none" onclick="switchTab('approvals',this)">Approvals</button>
     </div>
   </div>
 
@@ -216,10 +211,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let USERNAME   = null;
-// let IS_ADMIN   = false;
-let USER_ROLE = "user";
+let USER_ROLE  = "user";
 let VIEWING_USER = null;
-let STATE      = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], sliceBalance:0 };
+// FIX: removed sliceBalance, added bankAccounts
+let STATE      = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], bankAccounts:[] };
 let currentTab = 'dashboard';
 
 const fmt  = n => n>=100000?`₹${(n/100000).toFixed(2)}L`:n>=1000?`₹${(n/1000).toFixed(1)}K`:`₹${Number(n).toLocaleString('en-IN')}`;
@@ -235,7 +230,6 @@ function toast(msg, isErr=false) {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-// ── Quick login chips ─────────────────────────
 function loadKnownUsers() {
   try { return JSON.parse(localStorage.getItem('ct_known_users') || '[]'); } catch { return []; }
 }
@@ -255,127 +249,78 @@ function quickLogin(u) {
   enterApp();
 }
 
-// ── STEP 1: Enter username ────────────────────
 async function enterApp() {
   const raw = document.getElementById('username-input').value.trim().toLowerCase();
-
-  if (!raw) {
-    document.getElementById('auth-error').textContent = 'Please enter a username';
-    return;
-  }
-
-  if (raw.length < 2) {
-    document.getElementById('auth-error').textContent = 'Username too short';
-    return;
-  }
+  if (!raw) { document.getElementById('auth-error').textContent = 'Please enter a username'; return; }
+  if (raw.length < 2) { document.getElementById('auth-error').textContent = 'Username too short'; return; }
 
   const btn = document.getElementById('enter-btn');
   btn.disabled = true;
   btn.textContent = 'Checking...';
-
   document.getElementById('auth-error').textContent = '';
 
-  const { data } = await sb
-      .from('admins')
-      .select('username,role')
-      .eq('username', raw)
-      .maybeSingle();
+  const { data } = await sb.from('admins').select('username,role').eq('username', raw).maybeSingle();
 
   if (data) {
-
-      USERNAME = raw;
-      USER_ROLE = data.role;
-
-      document.getElementById('step-username').style.display = 'none';
-      document.getElementById('step-adminpass').style.display = '';
-      document.getElementById('admin-pass-input').focus();
-
+    USERNAME = raw;
+    USER_ROLE = data.role;
+    document.getElementById('step-username').style.display = 'none';
+    document.getElementById('step-adminpass').style.display = '';
+    document.getElementById('admin-pass-input').focus();
   } else {
-
-      USERNAME = raw;
-      USER_ROLE = "user";
-
-      saveKnownUser(raw);
-      await trackLogin(raw);
-      await loadAll();
-      launchApp();
-
+    USERNAME = raw;
+    USER_ROLE = "user";
+    saveKnownUser(raw);
+    await trackLogin(raw);
+    await loadAll();
+    launchApp();
   }
 
   btn.disabled = false;
   btn.textContent = 'Enter →';
 }
 
-// ── STEP 2: Admin password ────────────────────
 async function submitAdminPass() {
-
   const pass = document.getElementById('admin-pass-input').value;
-
   if (!pass) return;
 
   const btn = document.getElementById('admin-pass-btn');
-
   btn.disabled = true;
   btn.textContent = 'Checking...';
-
   document.getElementById('auth-error').textContent = '';
 
-  const { data } = await sb
-      .from('admins')
-      .select('password,role')
-      .eq('username', USERNAME)
-      .single();
+  const { data } = await sb.from('admins').select('password,role').eq('username', USERNAME).single();
 
   if (data && pass === data.password) {
-
-      USER_ROLE = data.role;
-
-      saveKnownUser(USERNAME);
-
-      await trackLogin(USERNAME);
-
-      await loadAll();
-
-      launchApp();
-
+    USER_ROLE = data.role;
+    saveKnownUser(USERNAME);
+    await trackLogin(USERNAME);
+    await loadAll();
+    launchApp();
   } else {
-
-      document.getElementById('auth-error').textContent = 'Wrong password';
-
+    document.getElementById('auth-error').textContent = 'Wrong password';
   }
 
   btn.disabled = false;
   btn.textContent = 'Unlock Admin →';
 }
 
-// ── Launch app after auth ─────────────────────
 function launchApp() {
   let badge = USERNAME;
+  if (USER_ROLE === "super_admin") badge = "👑 " + USERNAME;
+  else if (USER_ROLE === "admin") badge = "🛡️ " + USERNAME;
 
-if (USER_ROLE === "super_admin") {
-    badge = "👑 " + USERNAME;
-} else if (USER_ROLE === "admin") {
-    badge = "🛡️ " + USERNAME;
-}
-
-document.getElementById('user-badge').textContent = badge;
+  document.getElementById('user-badge').textContent = badge;
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app-screen').className = 'visible';
-  // Show admin tab only for admin
-  document.getElementById('admin-tab-btn').style.display =
-(USER_ROLE === 'admin' || USER_ROLE === 'super_admin')
-? ''
-: 'none';
+  document.getElementById('admin-tab-btn').style.display = (USER_ROLE === 'admin' || USER_ROLE === 'super_admin') ? '' : 'none';
+  document.getElementById('approval-tab-btn').style.display = USER_ROLE === 'super_admin' ? '' : 'none';
   renderDashboard();
-document.getElementById('approval-tab-btn').style.display =
-USER_ROLE === 'super_admin'
-? ''
-: 'none';
-updateApprovalBadge();
+  updateApprovalBadge();
 }
 
 function logout() {
-  USERNAME = null; USER_ROLE = "user";
+  USERNAME = null; USER_ROLE = "user"; VIEWING_USER = null;
   STATE = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], bankAccounts:[] };
   document.getElementById('username-input').value = '';
   document.getElementById('admin-pass-input').value = '';
@@ -384,7 +329,6 @@ function logout() {
   document.getElementById('step-adminpass').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app-screen').className = '';
-  // reset tabs
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('.tab-btn').classList.add('active');
   TABS.forEach(t => document.getElementById('tab-'+t).style.display = t==='dashboard'?'':'none');
@@ -392,56 +336,34 @@ function logout() {
   renderUserChips();
 }
 
-// ── Track login ───────────────────────────────
 async function trackLogin(username) {
-
-    const { data: admin } = await sb
-        .from("admins")
-        .select("role")
-        .eq("username", username)
-        .maybeSingle();
-
-    const role = admin?.role || "user";
-
-    const { data } = await sb
-        .from("app_users")
-        .select("login_count")
-        .eq("username", username)
-        .single();
-
-    const count = (data?.login_count || 0) + 1;
-
-    await sb
-        .from("app_users")
-        .upsert({
-            username,
-            role,
-            login_count: count,
-            last_login: new Date().toISOString()
-        });
+  const { data: admin } = await sb.from("admins").select("role").eq("username", username).maybeSingle();
+  const role = admin?.role || "user";
+  const { data } = await sb.from("app_users").select("login_count").eq("username", username).single();
+  const count = (data?.login_count || 0) + 1;
+  await sb.from("app_users").upsert({ username, role, login_count: count, last_login: new Date().toISOString() });
 }
 
-// ── DB ────────────────────────────────────────
 const uid = () => VIEWING_USER || USERNAME;
 
+// FIX: renamed destructured variable from `meta` to `bank` to match bank_accounts query
 async function loadAll() {
-  const [c, d, b, cc, inf, meta] = await Promise.all([
+  const [c, d, b, cc, inf, bank] = await Promise.all([
     sb.from('credits').select('*').eq('user_id', uid()).order('date'),
     sb.from('disbursements').select('*').eq('user_id', uid()).order('date'),
     sb.from('bills').select('*').eq('user_id', uid()).order('month'),
     sb.from('cc_bills').select('*').eq('user_id', uid()),
     sb.from('inflows').select('*').eq('user_id', uid()),
-    sb.from('bank_accounts').select('*').eq('user_id', uid()),
+    sb.from('bank_accounts').select('*').eq('user_id', uid()).order('created_at'),
   ]);
   STATE.credits       = c.data || [];
   STATE.disbursements = d.data || [];
   STATE.bills         = b.data || [];
   STATE.ccBills       = cc.data || [];
   STATE.inflows       = inf.data || [];
-  STATE.bankAccounts = bank.data || [];
+  STATE.bankAccounts  = bank.data || [];   // FIX: was `bank.data` referenced as undefined var
 }
 
-// ── Tabs ──────────────────────────────────────
 const TABS = ['dashboard','credits','disbursements','bills','cc','admin','approvals'];
 function switchTab(name, btn) {
   TABS.forEach(t => document.getElementById('tab-'+t).style.display = t===name?'':'none');
@@ -457,7 +379,7 @@ function renderTab(n) {
   if(n==='bills')         renderBills();
   if(n==='cc')            renderCC();
   if(n==='admin')         renderAdmin();
-  if(n==='approvals') renderApprovals();
+  if(n==='approvals')     renderApprovals();
 }
 
 // ── DASHBOARD ─────────────────────────────────
@@ -467,8 +389,9 @@ function renderDashboard() {
   const tCC = STATE.ccBills.reduce((s,c)=>s+ +c.amount,0);
   const tI  = STATE.inflows.reduce((s,i)=>s+ +i.amount,0);
   const rem = tC - tD;
+  // FIX: sum all bank accounts instead of single sliceBalance
   const totalBanks = STATE.bankAccounts.reduce((s,a) => s + +a.balance, 0);
-  const net = totalBanks + tI - tCC;
+  const net  = totalBanks + tI - tCC;
   const debt = rem - net;
 
   const monthly = {};
@@ -476,22 +399,23 @@ function renderDashboard() {
   const months = Object.entries(monthly).sort(([a],[b])=>a.localeCompare(b));
   const maxM = Math.max(...months.map(([,v])=>v), 1);
 
+  // FIX: removed stray JS comment that was rendering as visible text in the HTML
+  const bankRows = STATE.bankAccounts.length === 0
+    ? `<div class="net-row"><span style="color:var(--muted)">No bank accounts added</span><span style="font-family:var(--mono);color:var(--muted)">₹0</span></div>`
+    : STATE.bankAccounts.map(a => `
+        <div class="net-row">
+          <span style="color:var(--muted)">${a.name}</span>
+          <span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(+a.balance)}</span>
+        </div>`).join('');
+
   document.getElementById('tab-dashboard').innerHTML = `
     ${USER_ROLE==="super_admin" && VIEWING_USER ? `
     <div class="card card-blue" style="margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-            <div>
-                <b>Viewing Dashboard:</b> ${VIEWING_USER}
-            </div>
-
-            <button
-                class="btn-add btn-blue"
-                onclick="exitUserView()">
-                Back To My Dashboard
-            </button>
-        </div>
-    </div>
-    ` : ""}
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><b>Viewing Dashboard:</b> ${VIEWING_USER}</div>
+        <button class="btn-add btn-blue" onclick="exitUserView()">Back To My Dashboard</button>
+      </div>
+    </div>` : ""}
     <div class="grid2" style="margin-bottom:14px">
       ${kpi('Total Credits', fmt(tC), 'var(--green)', STATE.credits.length+' transactions')}
       ${kpi('Disbursed', fmt(tD), 'var(--red)', 'paid out')}
@@ -510,12 +434,7 @@ function renderDashboard() {
     </div>
     <div class="card">
       <div class="sec-label">Net Position</div>
-      // replace with a loop:
-      ${STATE.bankAccounts.map(a => `
-      <div class="net-row">
-      <span style="color:var(--muted)">${a.name}</span>
-      <span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(+a.balance)}</span>
-      </div>`).join('')}
+      ${bankRows}
       <div class="net-row"><span style="color:var(--muted)">Inflows</span><span style="font-family:var(--mono);color:var(--green)">+ ${fmtF(tI)}</span></div>
       <div class="net-row"><span style="color:var(--muted)">CC Bills</span><span style="font-family:var(--mono);color:var(--red)">− ${fmtF(tCC)}</span></div>
       <div class="net-final">
@@ -536,16 +455,9 @@ function kpi(label, value, color, sub) {
 // ── ADMIN TAB ─────────────────────────────────
 async function renderAdmin() {
   document.getElementById('tab-admin').innerHTML = '<div class="empty">Loading...</div>';
-  let query = sb
-    .from("app_users")
-    .select("*")
-    .order("last_login",{ascending:false});
-
-if(USER_ROLE==="admin"){
-    query = query.eq("role","user");
-}
-
-const { data, error } = await query;
+  let query = sb.from("app_users").select("*").order("last_login",{ascending:false});
+  if(USER_ROLE==="admin") query = query.eq("role","user");
+  const { data, error } = await query;
   if (error) { document.getElementById('tab-admin').innerHTML = '<div class="empty">Error loading users</div>'; return; }
 
   const users = data || [];
@@ -570,27 +482,12 @@ const { data, error } = await query;
             <div class="user-meta-text">Joined: ${joined} · Last seen: ${lastLogin}</div>
           </div>
           <div class="user-stats">
-
-    <div class="user-stat-val">
-        ${u.login_count || 1}
-    </div>
-
-    <div class="user-stat-lbl">
-        logins
-    </div>
-
-    ${USER_ROLE==="super_admin" && u.username !== USERNAME ? `
-        <button
-            class="btn-sm"
-            style="margin-top:6px"
-            onclick="viewUser('${u.username}')">
-
-            View Dashboard
-
-        </button>
-    ` : ""}
-
-</div>
+            <div class="user-stat-val">${u.login_count || 1}</div>
+            <div class="user-stat-lbl">logins</div>
+            ${USER_ROLE==="super_admin" && u.username !== USERNAME ? `
+              <button class="btn-sm" style="margin-top:6px" onclick="viewUser('${u.username}')">View Dashboard</button>
+            ` : ""}
+          </div>
         </div>`;
       }).join('')}
     </div>`;
@@ -612,16 +509,16 @@ function renderCredits() {
     <div class="card">
       <div class="sec-label">All Credits — ${STATE.credits.length} entries · ${fmt(STATE.credits.reduce((s,c)=>s+ +c.amount,0))}</div>
       ${sorted.length===0?'<div class="empty">No credits yet</div>':sorted.map(c=>`
-        <div class="data-row">
+        <div class="data-row" id="row-credits-${c.id}">
           <span class="d-date">${c.date}</span>
           <span class="d-note">${c.note||'—'}</span>
           <span class="pill p-green">${fmt(+c.amount)}</span>
-          <button class="del" onclick="editRow('credits','${c.id}')" id="edit-credits-${c.id}">✎</button>
+          <button class="edit-btn" onclick="editRow('credits','${c.id}')">✎</button>
           <button class="del" onclick="del('credits','${c.id}')">✕</button>
-          
         </div>`).join('')}
     </div>`;
 }
+
 async function addCredit() {
   const date = document.getElementById('c-date').value;
   const amount = parseFloat(document.getElementById('c-amount').value);
@@ -649,15 +546,17 @@ function renderDisbursements() {
     <div class="card">
       <div class="sec-label">All Disbursements — ${STATE.disbursements.length} entries · ${fmt(STATE.disbursements.reduce((s,d)=>s+ +d.amount,0))}</div>
       ${sorted.length===0?'<div class="empty">No disbursements yet</div>':sorted.map(d=>`
-        <div class="data-row">
+        <div class="data-row" id="row-disbursements-${d.id}">
           <span class="d-date">${d.date}</span>
           <span class="d-name">${d.name}</span>
           <span class="d-note">${d.note||''}</span>
           <span class="pill p-red">${fmt(+d.amount)}</span>
+          <button class="edit-btn" onclick="editRow('disbursements','${d.id}')">✎</button>
           <button class="del" onclick="del('disbursements','${d.id}')">✕</button>
         </div>`).join('')}
     </div>`;
 }
+
 async function addDisb() {
   const date = document.getElementById('d-date').value;
   const name = document.getElementById('d-name').value.trim();
@@ -688,7 +587,7 @@ function renderBills() {
       ${sorted.length===0?'<div class="empty">No bills yet</div>':sorted.map(b=>{
         const extras = JSON.parse(b.other_bills||'[]');
         const total = +b.current_bill + extras.reduce((s,o)=>s+ +o.amount,0);
-        return `<div class="data-row" style="flex-wrap:wrap;gap:6px">
+        return `<div class="data-row" id="row-bills-${b.id}" style="flex-wrap:wrap;gap:6px">
           <span style="font-family:var(--mono);font-size:11px;color:var(--blue);width:52px">${monthLbl(b.month)}</span>
           <span class="d-note">Bill: ₹${Number(b.current_bill).toLocaleString('en-IN')} ${extras.map(e=>`· ${e.label}: ₹${Number(e.amount).toLocaleString('en-IN')}`).join('')}</span>
           <span class="pill p-blue">${fmtF(total)}</span>
@@ -697,6 +596,7 @@ function renderBills() {
       }).join('')}
     </div>`;
 }
+
 async function addBill() {
   const month = document.getElementById('b-month').value;
   const current_bill = parseFloat(document.getElementById('b-bill').value)||0;
@@ -709,10 +609,13 @@ async function addBill() {
   STATE.bills.push(data); renderBills(); renderDashboard(); toast('Bill saved ✓');
 }
 
-// ── CC & INFLOWS ──────────────────────────────
+// ── CC & INFLOWS & BANK ACCOUNTS ─────────────
 function renderCC() {
   const tCC = STATE.ccBills.reduce((s,c)=>s+ +c.amount,0);
   const tI  = STATE.inflows.reduce((s,i)=>s+ +i.amount,0);
+  // FIX: calculate totalBanks locally so it's available in this function's template
+  const totalBanks = STATE.bankAccounts.reduce((s,a) => s + +a.balance, 0);
+
   document.getElementById('tab-cc').innerHTML = `
     <div class="grid2">
       <div>
@@ -727,9 +630,10 @@ function renderCC() {
         <div class="card">
           <div class="sec-label">CC Bills · ${fmt(tCC)}</div>
           ${STATE.ccBills.length===0?'<div class="empty">None</div>':STATE.ccBills.map(c=>`
-            <div class="data-row">
+            <div class="data-row" id="row-cc_bills-${c.id}">
               <span class="d-name">${c.name}</span>
               <span class="pill p-red">${fmt(+c.amount)}</span>
+              <button class="edit-btn" onclick="editRow('cc_bills','${c.id}')">✎</button>
               <button class="del" onclick="del('cc_bills','${c.id}')">✕</button>
             </div>`).join('')}
         </div>
@@ -746,36 +650,36 @@ function renderCC() {
         <div class="card" style="margin-bottom:12px">
           <div class="sec-label">Inflows · ${fmt(tI)}</div>
           ${STATE.inflows.length===0?'<div class="empty">None</div>':STATE.inflows.map(i=>`
-            <div class="data-row">
+            <div class="data-row" id="row-inflows-${i.id}">
               <span class="d-name">${i.name}</span>
               <span class="pill p-green">${fmt(+i.amount)}</span>
+              <button class="edit-btn" onclick="editRow('inflows','${i.id}')">✎</button>
               <button class="del" onclick="del('inflows','${i.id}')">✕</button>
             </div>`).join('')}
         </div>
-        <div class="card card-yellow">
-        <div class="sec-label">Add Bank Account</div>
-        <div class="form-row">
-        <div class="f"><label>Bank Name</label>
-        <input type="text" id="bank-name" placeholder="e.g. IOB, HSBC, Slice"/></div>
-        <div class="f"><label>Balance (₹)</label>
-        <input type="number" id="bank-bal" placeholder="50000"/></div>
-        <button class="btn-add btn-yellow" onclick="addBankAccount()">Add</button>
-        </div>
+        <div class="card card-yellow" style="margin-bottom:12px">
+          <div class="sec-label">Add Bank Account</div>
+          <div class="form-row">
+            <div class="f"><label>Bank Name</label><input type="text" id="bank-name" placeholder="e.g. IOB, HSBC, Slice"/></div>
+            <div class="f"><label>Balance (₹)</label><input type="number" id="bank-bal" placeholder="50000"/></div>
+            <button class="btn-add btn-yellow" onclick="addBankAccount()">Add</button>
+          </div>
         </div>
         <div class="card">
-        <div class="sec-label">Bank Accounts · ${fmt(totalBanks)}</div>
-        ${STATE.bankAccounts.length===0 ? '<div class="empty">No accounts added</div>' :
-        STATE.bankAccounts.map(a => `
-        <div class="data-row" id="bank-row-${a.id}">
-        <span class="d-name">${a.name}</span>
-        <span class="pill p-yellow">${fmt(+a.balance)}</span>
-        <button class="del" onclick="editBankRow('${a.id}','${a.name}',${a.balance})">✎</button>
-        <button class="del" onclick="del('bank_accounts','${a.id}')">✕</button>
-        </div>`).join('')}
+          <div class="sec-label">Bank Accounts · ${fmt(totalBanks)}</div>
+          ${STATE.bankAccounts.length===0 ? '<div class="empty">No accounts added yet</div>' :
+            STATE.bankAccounts.map(a => `
+              <div class="data-row" id="bank-row-${a.id}">
+                <span class="d-name">${a.name}</span>
+                <span class="pill p-yellow">${fmt(+a.balance)}</span>
+                <button class="edit-btn" onclick="editBankRow('${a.id}','${a.name}',${a.balance})">✎</button>
+                <button class="del" onclick="del('bank_accounts','${a.id}')">✕</button>
+              </div>`).join('')}
         </div>
       </div>
     </div>`;
 }
+
 async function addCC() {
   const name = document.getElementById('cc-name').value.trim();
   const amount = parseFloat(document.getElementById('cc-amount').value);
@@ -784,6 +688,7 @@ async function addCC() {
   if (error) { toast('Error: '+error.message, true); return; }
   STATE.ccBills.push(data); renderCC(); renderDashboard(); toast('Added ✓');
 }
+
 async function addInflow() {
   const name = document.getElementById('inf-name').value.trim();
   const amount = parseFloat(document.getElementById('inf-amount').value);
@@ -792,281 +697,183 @@ async function addInflow() {
   if (error) { toast('Error: '+error.message, true); return; }
   STATE.inflows.push(data); renderCC(); renderDashboard(); toast('Added ✓');
 }
-// async function saveSlice() {
-//   const val = parseFloat(document.getElementById('slice-val').value)||0;
-//   STATE.sliceBalance = val;
-//   await sb.from('user_meta').upsert({ user_id:uid(), slice_balance:val });
-//   renderDashboard(); toast('Slice balance updated ✓');
-// }
-function editRow(table, id) {
-const item = STATE[table === 'credits' ? 'credits'
-: table === 'disbursements' ? 'disbursements' : table]
-.find(r => r.id == id);
-if (!item) return;
-const row = document.getElementById('edit-'+table+'-'+id).closest('.data-row');
-// credits fields:
-if (table === 'credits') {
-row.innerHTML = `
-<input type="date" value="${item.date}" id="er-date-${id}" style="width:130px"/>
-<input type="number" value="${item.amount}" id="er-amt-${id}" style="width:110px"/>
-<input type="text" value="${item.note||''}" id="er-note-${id}" style="flex:1" placeholder="Note"/>
-<button class="btn-add btn-green" onclick="saveRowEdit('credits','${id}')">Save</button>
-<button class="del" onclick="renderCredits()">Cancel</button>`;
-}
-// add similar blocks for disbursements (date+name+amount+note)
-}
-async function saveRowEdit(table, id) {
-const updates = {};
-if (table === 'credits') {
-updates.date = document.getElementById('er-date-'+id).value;
-updates.amount = parseFloat(document.getElementById('er-amt-'+id).value);
-updates.note = document.getElementById('er-note-'+id).value.trim();
-}
-if (!updates.amount) { toast('Amount required', true); return; }
-const { error } = await sb.from(table).update(updates).eq('id', id);
-if (error) { toast(error.message, true); return; }
-Object.assign(STATE.credits.find(r=>r.id==id)||{}, updates);
-renderTab(currentTab); renderDashboard(); toast('Updated ✓');
-}
+
 async function addBankAccount() {
-const name = document.getElementById('bank-name').value.trim();
-const balance = parseFloat(document.getElementById('bank-bal').value);
-if (!name || isNaN(balance)) { toast('Fill bank name and balance', true); return; }
-const { data, error } = await sb.from('bank_accounts')
-.insert({ user_id: uid(), name, balance }).select().single();
-if (error) { toast('Error: '+error.message, true); return; }
-STATE.bankAccounts.push(data);
-renderCC(); renderDashboard(); toast('Bank account added ✓');
+  const name = document.getElementById('bank-name').value.trim();
+  const balance = parseFloat(document.getElementById('bank-bal').value);
+  if (!name || isNaN(balance)) { toast('Fill bank name and balance', true); return; }
+  const { data, error } = await sb.from('bank_accounts').insert({ user_id: uid(), name, balance }).select().single();
+  if (error) { toast('Error: '+error.message, true); return; }
+  STATE.bankAccounts.push(data);
+  renderCC(); renderDashboard(); toast('Bank account added ✓');
 }
+
 function editBankRow(id, name, balance) {
-const row = document.getElementById('bank-row-'+id);
-row.innerHTML = `
-<input type="text" value="${name}" id="be-name-${id}" style="flex:1;max-width:140px"/>
-<input type="number" value="${balance}" id="be-bal-${id}" style="flex:1;max-width:120px"/>
-<button class="btn-add btn-yellow" onclick="saveBankEdit('${id}')">Save</button>
-<button class="del" onclick="renderCC()">Cancel</button>`;
+  const row = document.getElementById('bank-row-'+id);
+  row.innerHTML = `
+    <input type="text" value="${name}" id="be-name-${id}" style="flex:1;max-width:140px"/>
+    <input type="number" value="${balance}" id="be-bal-${id}" style="flex:1;max-width:120px"/>
+    <button class="btn-add btn-yellow" onclick="saveBankEdit('${id}')">Save</button>
+    <button class="del" onclick="renderCC()">Cancel</button>`;
 }
+
 async function saveBankEdit(id) {
-const name = document.getElementById('be-name-'+id).value.trim();
-const balance = parseFloat(document.getElementById('be-bal-'+id).value);
-if (!name || isNaN(balance)) { toast('Fill both fields', true); return; }
-const { error } = await sb.from('bank_accounts')
-.update({ name, balance }).eq('id', id);
-if (error) { toast('Error: '+error.message, true); return; }
-const acc = STATE.bankAccounts.find(a => a.id == id);
-if (acc) { acc.name = name; acc.balance = balance; }
-renderCC(); renderDashboard(); toast('Updated ✓');
+  const name = document.getElementById('be-name-'+id).value.trim();
+  const balance = parseFloat(document.getElementById('be-bal-'+id).value);
+  if (!name || isNaN(balance)) { toast('Fill both fields', true); return; }
+  const { error } = await sb.from('bank_accounts').update({ name, balance }).eq('id', id);
+  if (error) { toast('Error: '+error.message, true); return; }
+  const acc = STATE.bankAccounts.find(a => a.id == id);
+  if (acc) { acc.name = name; acc.balance = balance; }
+  renderCC(); renderDashboard(); toast('Updated ✓');
+}
+
+// ── INLINE EDIT for Credits / Disbursements / CC Bills / Inflows ──
+function editRow(table, id) {
+  // find item in the right state array
+  const stateKey = table === 'cc_bills' ? 'ccBills' : table;
+  const arr = STATE[stateKey];
+  if (!arr) return;
+  const item = arr.find(r => r.id == id);
+  if (!item) return;
+
+  const row = document.getElementById('row-'+table+'-'+id);
+  if (!row) return;
+
+  if (table === 'credits') {
+    row.innerHTML = `
+      <input type="date" value="${item.date}" id="er-date-${id}" style="width:130px"/>
+      <input type="number" value="${item.amount}" id="er-amt-${id}" style="width:110px"/>
+      <input type="text" value="${item.note||''}" id="er-note-${id}" style="flex:1" placeholder="Note"/>
+      <button class="btn-add btn-green" onclick="saveRowEdit('credits','${id}')">Save</button>
+      <button class="del" onclick="renderCredits()">Cancel</button>`;
+  } else if (table === 'disbursements') {
+    row.innerHTML = `
+      <input type="date" value="${item.date}" id="er-date-${id}" style="width:120px"/>
+      <input type="text" value="${item.name}" id="er-name-${id}" style="width:100px" placeholder="Person"/>
+      <input type="number" value="${item.amount}" id="er-amt-${id}" style="width:100px"/>
+      <input type="text" value="${item.note||''}" id="er-note-${id}" style="flex:1" placeholder="Note"/>
+      <button class="btn-add btn-red" onclick="saveRowEdit('disbursements','${id}')">Save</button>
+      <button class="del" onclick="renderDisbursements()">Cancel</button>`;
+  } else if (table === 'cc_bills') {
+    row.innerHTML = `
+      <input type="text" value="${item.name}" id="er-name-${id}" style="flex:1" placeholder="Card name"/>
+      <input type="number" value="${item.amount}" id="er-amt-${id}" style="width:120px"/>
+      <button class="btn-add btn-red" onclick="saveRowEdit('cc_bills','${id}')">Save</button>
+      <button class="del" onclick="renderCC()">Cancel</button>`;
+  } else if (table === 'inflows') {
+    row.innerHTML = `
+      <input type="text" value="${item.name}" id="er-name-${id}" style="flex:1" placeholder="Source"/>
+      <input type="number" value="${item.amount}" id="er-amt-${id}" style="width:120px"/>
+      <button class="btn-add btn-green" onclick="saveRowEdit('inflows','${id}')">Save</button>
+      <button class="del" onclick="renderCC()">Cancel</button>`;
+  }
+}
+
+async function saveRowEdit(table, id) {
+  const updates = {};
+
+  if (table === 'credits') {
+    updates.date   = document.getElementById('er-date-'+id).value;
+    updates.amount = parseFloat(document.getElementById('er-amt-'+id).value);
+    updates.note   = document.getElementById('er-note-'+id).value.trim();
+  } else if (table === 'disbursements') {
+    updates.date   = document.getElementById('er-date-'+id).value;
+    updates.name   = document.getElementById('er-name-'+id).value.trim();
+    updates.amount = parseFloat(document.getElementById('er-amt-'+id).value);
+    updates.note   = document.getElementById('er-note-'+id).value.trim();
+  } else if (table === 'cc_bills' || table === 'inflows') {
+    updates.name   = document.getElementById('er-name-'+id).value.trim();
+    updates.amount = parseFloat(document.getElementById('er-amt-'+id).value);
+  }
+
+  if (!updates.amount) { toast('Amount required', true); return; }
+
+  const { error } = await sb.from(table).update(updates).eq('id', id);
+  if (error) { toast(error.message, true); return; }
+
+  // update local state
+  const stateKey = table === 'cc_bills' ? 'ccBills' : table;
+  const item = STATE[stateKey].find(r => r.id == id);
+  if (item) Object.assign(item, updates);
+
+  renderTab(currentTab);
+  renderDashboard();
+  toast('Updated ✓');
 }
 
 // ── DELETE ────────────────────────────────────
 async function del(table, id) {
-  await sb.from(table).delete().eq('id', id);
+  const { error } = await sb.from(table).delete().eq('id', id);
+  if (error) { toast('Error: '+error.message, true); return; }
+  // FIX: added bank_accounts to delete handler
   if(table==='credits')       STATE.credits       = STATE.credits.filter(r=>r.id!=id);
   if(table==='disbursements') STATE.disbursements = STATE.disbursements.filter(r=>r.id!=id);
   if(table==='bills')         STATE.bills         = STATE.bills.filter(r=>r.id!=id);
   if(table==='cc_bills')      STATE.ccBills       = STATE.ccBills.filter(r=>r.id!=id);
   if(table==='inflows')       STATE.inflows       = STATE.inflows.filter(r=>r.id!=id);
+  if(table==='bank_accounts') STATE.bankAccounts  = STATE.bankAccounts.filter(r=>r.id!=id);
   renderTab(currentTab); renderDashboard(); toast('Deleted');
 }
-async function viewUser(username){
 
-    if(USER_ROLE !== "super_admin"){
-        toast("Access Denied", true);
-        return;
-    }
-
-    VIEWING_USER = username;
-
-    await loadAll();
-
-    renderDashboard();
-
-    switchTab(
-        "dashboard",
-        document.querySelector(".tab-btn")
-    );
-
-    toast("Viewing " + username);
+async function viewUser(username) {
+  if(USER_ROLE !== "super_admin") { toast("Access Denied", true); return; }
+  VIEWING_USER = username;
+  await loadAll();
+  renderDashboard();
+  switchTab("dashboard", document.querySelector(".tab-btn"));
+  toast("Viewing " + username);
 }
 
-async function exitUserView(){
-
-    VIEWING_USER = null;
-
-    await loadAll();
-
-    renderDashboard();
-
-    switchTab(
-        "dashboard",
-        document.querySelector(".tab-btn")
-    );
-
-    toast("Returned to your dashboard");
+async function exitUserView() {
+  VIEWING_USER = null;
+  await loadAll();
+  renderDashboard();
+  switchTab("dashboard", document.querySelector(".tab-btn"));
+  toast("Returned to your dashboard");
 }
-async function renderApprovals(){
 
-    const {data:requests,error}=await sb
-        .from("admin_requests")
-        .select("*")
-        .eq("status","pending")
-        .order("requested_at",{ascending:false});
-
-    document.getElementById("tab-approvals").innerHTML=`
-
+async function renderApprovals() {
+  const {data:requests, error} = await sb.from("admin_requests").select("*").eq("status","pending").order("requested_at",{ascending:false});
+  document.getElementById("tab-approvals").innerHTML = `
     <div class="card">
-
-        <div class="sec-label">
-
-            Pending Admin Requests (${requests.length})
-
-        </div>
-
-        ${
-        requests.length===0
-
-        ?
-
-        `<div class="empty">
-
-            No Pending Requests
-
-        </div>`
-
-        :
-
-        requests.map(r=>`
-
-        <div class="user-row">
-
+      <div class="sec-label">Pending Admin Requests (${requests ? requests.length : 0})</div>
+      ${!requests || requests.length===0
+        ? '<div class="empty">No Pending Requests</div>'
+        : requests.map(r=>`
+          <div class="user-row">
             <div class="user-info">
-
-                <div class="user-name">
-
-                    ${r.username}
-
-                </div>
-
-                <div class="user-meta-text">
-
-                    Requested:
-                    ${new Date(r.requested_at).toLocaleString()}
-
-                </div>
-
+              <div class="user-name">${r.username}</div>
+              <div class="user-meta-text">Requested: ${new Date(r.requested_at).toLocaleString()}</div>
             </div>
-
-            <button
-            class="btn-add btn-green"
-            onclick="approveAdmin(${r.id})">
-
-            Approve
-
-            </button>
-
-            <button
-            class="btn-add btn-red"
-            onclick="rejectAdmin(${r.id})">
-
-            Reject
-
-            </button>
-
-        </div>
-
-        `).join("")
-        }
-
-    </div>
-    `;
+            <button class="btn-add btn-green" onclick="approveAdmin(${r.id})">Approve</button>
+            <button class="btn-add btn-red" onclick="rejectAdmin(${r.id})">Reject</button>
+          </div>`).join('')}
+    </div>`;
 }
-async function approveAdmin(id){
 
-    const {data:req,error}=await sb
-        .from("admin_requests")
-        .select("*")
-        .eq("id",id)
-        .single();
-
-    if(error){
-        toast(error.message,true);
-        return;
-    }
-
-    const {data:exists}=await sb
-        .from("admins")
-        .select("id")
-        .eq("username",req.username)
-        .maybeSingle();
-
-    if(exists){
-        toast("Already an admin",true);
-        return;
-    }
-
-    const {error:insertError}=await sb
-        .from("admins")
-        .insert({
-            username:req.username,
-            password:req.password,
-            role:"admin"
-        });
-
-    if(insertError){
-        toast(insertError.message,true);
-        return;
-    }
-
-    await sb
-        .from("admin_requests")
-        .update({
-            status:"approved",
-            approved_by:USERNAME,
-            approved_at:new Date().toISOString()
-        })
-        .eq("id",id);
-
-    renderApprovals();
-    updateApprovalBadge();
-
-    toast("Admin Approved");
+async function approveAdmin(id) {
+  const {data:req, error} = await sb.from("admin_requests").select("*").eq("id",id).single();
+  if(error) { toast(error.message, true); return; }
+  const {data:exists} = await sb.from("admins").select("id").eq("username",req.username).maybeSingle();
+  if(exists) { toast("Already an admin", true); return; }
+  const {error:insertError} = await sb.from("admins").insert({ username:req.username, password:req.password, role:"admin" });
+  if(insertError) { toast(insertError.message, true); return; }
+  await sb.from("admin_requests").update({ status:"approved", approved_by:USERNAME, approved_at:new Date().toISOString() }).eq("id",id);
+  renderApprovals(); updateApprovalBadge(); toast("Admin Approved");
 }
-async function rejectAdmin(id){
 
-    await sb
-        .from("admin_requests")
-        .update({
-            status:"rejected",
-            approved_by:USERNAME,
-            approved_at:new Date().toISOString()
-        })
-        .eq("id",id);
-
-    renderApprovals();
-    updateApprovalBadge();
-
-    toast("Request Rejected");
+async function rejectAdmin(id) {
+  await sb.from("admin_requests").update({ status:"rejected", approved_by:USERNAME, approved_at:new Date().toISOString() }).eq("id",id);
+  renderApprovals(); updateApprovalBadge(); toast("Request Rejected");
 }
-function isViewingOtherUser() {
-    return USER_ROLE === "super_admin" && VIEWING_USER;
-}
-async function updateApprovalBadge(){
 
-    if(USER_ROLE !== "super_admin") return;
-
-    const {count,error} = await sb
-        .from("admin_requests")
-        .select("*",{count:"exact",head:true})
-        .eq("status","pending");
-
-    if(error) return;
-
-    const btn = document.getElementById("approval-tab-btn");
-
-    btn.innerHTML =
-        count > 0
-        ? `Approvals 🔴 (${count})`
-        : "Approvals";
+async function updateApprovalBadge() {
+  if(USER_ROLE !== "super_admin") return;
+  const {count, error} = await sb.from("admin_requests").select("*",{count:"exact",head:true}).eq("status","pending");
+  if(error) return;
+  const btn = document.getElementById("approval-tab-btn");
+  btn.innerHTML = count > 0 ? `Approvals 🔴 (${count})` : "Approvals";
 }
 
 // ── CSV ───────────────────────────────────────
@@ -1081,7 +888,8 @@ function downloadCSV() {
   });
   STATE.ccBills.forEach(c => rows.push(['CC Bill', '', c.name, c.amount, '']));
   STATE.inflows.forEach(i => rows.push(['Inflow', '', i.name, i.amount, '']));
-  rows.push(['Slice Balance', '', '', STATE.sliceBalance, '']);
+  // FIX: export all bank accounts instead of single sliceBalance
+  STATE.bankAccounts.forEach(a => rows.push(['Bank Account', '', a.name, a.balance, '']));
   const csv = rows.map(r => r.map(v=>`"${v}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
