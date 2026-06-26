@@ -65,36 +65,20 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2dGJteHRzdGVqbGRnc2p6ZGZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzM1NzAsImV4cCI6MjA5NzI0OTU3MH0.ointE-k7Few1JKkZNaCjwLZSePKII1sWyn_KaznTF_8';
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ── Telegram config — fill these in ──────────────────────────────
-    const TELEGRAM_BOT_TOKEN = '8650923942:AAH2ZU6zHXygP6W4sqbKMlKcgaziGnZ61SA';   // from @BotFather
-    const TELEGRAM_CHAT_ID   = '2018589600';     // your personal chat ID
-
     async function sendTelegramNotification(username) {
-        // Skip silently if not configured yet
-        if (TELEGRAM_BOT_TOKEN === '8650923942:AAH2ZU6zHXygP6W4sqbKMlKcgaziGnZ61SA') return;
-
-        const text =
-            `🔔 *New Admin Request*\n\n` +
-            `👤 Username: \`${username}\`\n` +
-            `🕐 Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n` +
-            `Open the app → Approvals tab to approve or reject.`;
-
-        try {
-            await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id:    TELEGRAM_CHAT_ID,
-                    text:       text,
-                    parse_mode: 'Markdown'
-                })
-            });
-        } catch (e) {
-            // Notification failed silently — request is still saved
-            console.warn('Telegram notify failed:', e);
-        }
+    try {
+        await fetch(`${SUPABASE_URL}/functions/v1/notify-telegram`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({ username })
+        });
+    } catch (e) {
+        console.warn('Telegram notify failed:', e);
     }
-
+}
     async function submitRequest() {
         const username = document.getElementById('username').value.trim().toLowerCase();
         const password = document.getElementById('password').value;
