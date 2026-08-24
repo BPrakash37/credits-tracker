@@ -128,6 +128,28 @@
   #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--green); color:var(--bg); border-radius:8px; padding:10px 22px; font-weight:700; font-size:13px; z-index:999; box-shadow:0 4px 20px #0008; transition:transform .25s ease; pointer-events:none; }
   #toast.show { transform:translateX(-50%) translateY(0); }
   #toast.err { background:var(--red); color:#fff; }
+
+  .card-header-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; }
+  .card-header-row .sec-label { margin-bottom:0; }
+  .hist-btn { background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-family:var(--sans); font-size:10px; padding:4px 10px; cursor:pointer; flex-shrink:0; white-space:nowrap; transition:all .15s; }
+  .hist-btn:hover { border-color:var(--blue); color:var(--blue); }
+
+  #history-modal { display:none; position:fixed; inset:0; background:#000a; z-index:1000; align-items:center; justify-content:center; padding:20px; }
+  #history-modal.show { display:flex; }
+  .hist-box { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; width:100%; max-width:440px; max-height:78vh; display:flex; flex-direction:column; }
+  .hist-title-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .hist-title-row .hist-title { font-size:15px; font-weight:700; }
+  .hist-close { background:transparent; border:none; color:var(--muted); font-size:22px; cursor:pointer; line-height:1; padding:0 4px; }
+  .hist-close:hover { color:var(--red); }
+  .hist-list { overflow-y:auto; flex:1; }
+  .hist-row { display:flex; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .hist-row:last-child { border-bottom:none; }
+  .hist-date { font-family:var(--mono); font-size:10px; color:var(--muted); width:64px; flex-shrink:0; }
+  .hist-action { border-radius:6px; padding:2px 7px; font-size:9px; font-weight:700; font-family:var(--mono); flex-shrink:0; letter-spacing:.05em; }
+  .hist-action.edit { background:#7b8cde22; color:var(--blue); }
+  .hist-action.delete { background:#f0654a22; color:var(--red); }
+  .hist-name { flex:1; font-weight:500; }
+  .hist-amt { font-family:var(--mono); font-size:11px; color:var(--muted); flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -199,6 +221,16 @@
     <div id="tab-cc" style="display:none"></div>
     <div id="tab-admin" style="display:none"></div>
     <div id="tab-approvals" style="display:none"></div>
+  </div>
+</div>
+
+<div id="history-modal" onclick="if(event.target===this) closeHistory()">
+  <div class="hist-box">
+    <div class="hist-title-row">
+      <div class="hist-title" id="hist-title-text">History</div>
+      <button class="hist-close" onclick="closeHistory()">×</button>
+    </div>
+    <div class="hist-list" id="hist-list"></div>
   </div>
 </div>
 
@@ -625,7 +657,10 @@ function renderCC() {
           </div>
         </div>
         <div class="card">
-          <div class="sec-label">CC Bills · ${fmt(tCC)}</div>
+          <div class="card-header-row">
+            <div class="sec-label">CC Bills · ${fmt(tCC)}</div>
+            <button class="hist-btn" onclick="showHistory('cc_bills','CC Bills')">History</button>
+          </div>
           ${STATE.ccBills.length===0?'<div class="empty">None</div>':STATE.ccBills.map(c=>`
             <div class="data-row" id="row-cc_bills-${c.id}">
               <span class="d-name">${c.name}</span>
@@ -645,7 +680,10 @@ function renderCC() {
           </div>
         </div>
         <div class="card" style="margin-bottom:12px">
-          <div class="sec-label">Inflows · ${fmt(tI)}</div>
+          <div class="card-header-row">
+            <div class="sec-label">Inflows · ${fmt(tI)}</div>
+            <button class="hist-btn" onclick="showHistory('inflows','Inflows')">History</button>
+          </div>
           ${STATE.inflows.length===0?'<div class="empty">None</div>':STATE.inflows.map(i=>`
             <div class="data-row" id="row-inflows-${i.id}">
               <span class="d-name">${i.name}</span>
@@ -663,7 +701,10 @@ function renderCC() {
           </div>
         </div>
         <div class="card">
-          <div class="sec-label">Bank Accounts · ${fmt(totalBanks)}</div>
+          <div class="card-header-row">
+            <div class="sec-label">Bank Accounts · ${fmt(totalBanks)}</div>
+            <button class="hist-btn" onclick="showHistory('bank_accounts','Bank Accounts')">History</button>
+          </div>
           ${STATE.bankAccounts.length===0 ? '<div class="empty">No accounts added yet</div>' :
             STATE.bankAccounts.map(a => `
               <div class="data-row" id="bank-row-${a.id}">
@@ -722,6 +763,7 @@ async function saveBankEdit(id) {
   if (error) { toast('Error: '+error.message, true); return; }
   const acc = STATE.bankAccounts.find(a => a.id == id);
   if (acc) { acc.name = name; acc.balance = balance; }
+  logActivity('bank_accounts', 'edit', name, balance);
   renderCC(); renderDashboard(); toast('Updated ✓');
 }
 
@@ -794,13 +836,61 @@ async function saveRowEdit(table, id) {
   const item = STATE[stateKey].find(r => r.id == id);
   if (item) Object.assign(item, updates);
 
+  if (table === 'cc_bills' || table === 'inflows') {
+    logActivity(table, 'edit', updates.name, updates.amount);
+  }
+
   renderTab(currentTab);
   renderDashboard();
   toast('Updated ✓');
 }
 
+// ── ACTIVITY LOG (History) ───────────────────
+// Requires a Supabase table `activity_log` — see setup note at bottom of file.
+async function logActivity(table, action, name, amount) {
+  try {
+    await sb.from('activity_log').insert({ user_id: uid(), table_name: table, action, name, amount });
+  } catch (e) { /* non-fatal — history is best-effort */ }
+}
+
+function stateKeyFor(table) {
+  if (table === 'cc_bills') return 'ccBills';
+  if (table === 'bank_accounts') return 'bankAccounts';
+  return table;
+}
+
+async function showHistory(table, label) {
+  document.getElementById('hist-title-text').textContent = label + ' History';
+  document.getElementById('hist-list').innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('history-modal').classList.add('show');
+
+  const { data, error } = await sb.from('activity_log')
+    .select('*')
+    .eq('user_id', uid())
+    .eq('table_name', table)
+    .order('created_at', { ascending:false })
+    .limit(200);
+
+  if (error) { document.getElementById('hist-list').innerHTML = '<div class="empty">Error loading history</div>'; return; }
+  if (!data || data.length===0) { document.getElementById('hist-list').innerHTML = '<div class="empty">No edits or deletions logged yet</div>'; return; }
+
+  document.getElementById('hist-list').innerHTML = data.map(h => `
+    <div class="hist-row">
+      <span class="hist-date">${new Date(h.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</span>
+      <span class="hist-action ${h.action}">${h.action==='edit'?'EDITED':'DELETED'}</span>
+      <span class="hist-name">${h.name||'—'}</span>
+      <span class="hist-amt">${h.amount!=null ? fmt(+h.amount) : ''}</span>
+    </div>`).join('');
+}
+
+function closeHistory() {
+  document.getElementById('history-modal').classList.remove('show');
+}
+
 // ── DELETE ────────────────────────────────────
 async function del(table, id) {
+  const item = STATE[stateKeyFor(table)]?.find(r => r.id == id);
+
   const { error } = await sb.from(table).delete().eq('id', id);
   if (error) { toast('Error: '+error.message, true); return; }
   // FIX: added bank_accounts to delete handler
@@ -810,6 +900,11 @@ async function del(table, id) {
   if(table==='cc_bills')      STATE.ccBills       = STATE.ccBills.filter(r=>r.id!=id);
   if(table==='inflows')       STATE.inflows       = STATE.inflows.filter(r=>r.id!=id);
   if(table==='bank_accounts') STATE.bankAccounts  = STATE.bankAccounts.filter(r=>r.id!=id);
+
+  if (item && ['cc_bills','inflows','bank_accounts'].includes(table)) {
+    logActivity(table, 'delete', item.name, item.amount != null ? item.amount : item.balance);
+  }
+
   renderTab(currentTab); renderDashboard(); toast('Deleted');
 }
 
