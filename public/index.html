@@ -141,7 +141,40 @@
   .hist-title-row .hist-title { font-size:15px; font-weight:700; }
   .hist-close { background:transparent; border:none; color:var(--muted); font-size:22px; cursor:pointer; line-height:1; padding:0 4px; }
   .hist-close:hover { color:var(--red); }
-  .hist-list { overflow-y:auto; flex:1; }
+  .hist-list {
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.hist-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.hist-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hist-list::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 10px;
+}
+
+.hist-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text);
+}
+
+.hist-list::-webkit-scrollbar-button {
+  display: none;
+}
+
+.hist-list::-webkit-scrollbar-button:single-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
   .hist-row { display:flex; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid var(--border); font-size:12px; }
   .hist-row:last-child { border-bottom:none; }
   .hist-date { font-family:var(--mono); font-size:10px; color:var(--muted); width:105px; flex-shrink:0; }
