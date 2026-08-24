@@ -144,7 +144,7 @@
   .hist-list { overflow-y:auto; flex:1; }
   .hist-row { display:flex; align-items:center; gap:9px; padding:9px 0; border-bottom:1px solid var(--border); font-size:12px; }
   .hist-row:last-child { border-bottom:none; }
-  .hist-date { font-family:var(--mono); font-size:10px; color:var(--muted); width:64px; flex-shrink:0; }
+  .hist-date { font-family:var(--mono); font-size:10px; color:var(--muted); width:105px; flex-shrink:0; }
   .hist-action { border-radius:6px; padding:2px 7px; font-size:9px; font-weight:700; font-family:var(--mono); flex-shrink:0; letter-spacing:.05em; }
   .hist-action.edit { background:#7b8cde22; color:var(--blue); }
   .hist-action.delete { background:#f0654a22; color:var(--red); }
@@ -876,7 +876,10 @@ async function showHistory(table, label) {
 
   document.getElementById('hist-list').innerHTML = data.map(h => `
     <div class="hist-row">
-      <span class="hist-date">${new Date(h.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</span>
+      <span class="hist-date">
+        ${new Date(h.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}
+        - ${new Date(h.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})}
+      </span>
       <span class="hist-action ${h.action}">${h.action==='edit'?'EDITED':'DELETED'}</span>
       <span class="hist-name">${h.name||'—'}</span>
       <span class="hist-amt">${h.amount!=null ? fmt(+h.amount) : ''}</span>
