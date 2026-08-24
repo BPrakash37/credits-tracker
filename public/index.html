@@ -53,8 +53,20 @@
   .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; flex-shrink:0; }
   .app-name { font-size:15px; font-weight:700; }
   .app-sub { font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); }
-  .topbar-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .user-badge { background:var(--green); color:var(--bg); border-radius:20px; padding:5px 14px; font-size:12px; font-weight:700; }
+  .topbar-right { display:flex; align-items:center; gap:8px; flex-wrap:nowrap;flex-shrink:0;}
+  .user-badge {
+    background:var(--green);
+    color:var(--bg);
+    border-radius:20px;
+    padding:5px 14px;
+    font-size:12px;
+    font-weight:700;
+    max-width:180px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    flex-shrink:1;
+  }
   .btn-sm { background:transparent; border:1px solid var(--border); border-radius:8px; color:var(--muted); font-family:var(--sans); font-size:12px; padding:6px 12px; cursor:pointer; transition:all .15s; }
   .btn-sm:hover { border-color:var(--green); color:var(--green); }
   .btn-out { border-color:var(--red) !important; color:var(--red) !important; }
@@ -300,7 +312,7 @@ function loadKnownUsers() {
 }
 function saveKnownUser(u) {
   const list = loadKnownUsers();
-  if (!list.includes(u)) { list.unshift(u); localStorage.setItem('ct_known_users', JSON.stringify(list.slice(0,5))); }
+  if (!list.includes(u)) { list.unshift(u); localStorage.setItem('ct_known_users', JSON.stringify(list.slice(0,3))); }
 }
 function renderUserChips() {
   const users = loadKnownUsers();
