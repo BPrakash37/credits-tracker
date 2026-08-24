@@ -50,7 +50,19 @@
 
   #app-screen { display:none; min-height:100vh; flex-direction:column; }
   #app-screen.visible { display:flex; }
-  .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; flex-shrink:0; }
+  .topbar {
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:12px 20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  position:sticky;
+  top:0;
+  z-index:100;
+  flex-shrink:0;
+  gap:12px;
+}
   .app-name { font-size:15px; font-weight:700; }
   .app-sub { font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); }
   .topbar-right { display:flex; align-items:center; gap:8px; flex-wrap:nowrap;flex-shrink:0;}
