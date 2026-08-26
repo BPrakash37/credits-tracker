@@ -208,6 +208,34 @@
   .hist-action.new { background:#3de89a22; color:var(--green); }
   .hist-name { flex:1; font-weight:500; }
   .hist-amt { font-family:var(--mono); font-size:11px; color:var(--muted); flex-shrink:0; }
+  #chat-fab {
+    position: fixed; width:56px; height:56px; border-radius:50%;
+    background:var(--blue); color:#fff; border:none; font-size:24px;
+    cursor:grab; z-index:1050; box-shadow:0 4px 16px #0007;
+    display:flex; align-items:center; justify-content:center;
+    touch-action:none; user-select:none;
+  }
+  #chat-fab:active { cursor:grabbing; }
+
+  #chat-panel {
+    position:fixed; width:320px; max-width:90vw; height:440px; max-height:70vh;
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    box-shadow:0 8px 32px #000a; display:none; flex-direction:column;
+    overflow:hidden; z-index:1049;
+  }
+  #chat-panel.open { display:flex; }
+  .chat-panel-header { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border); font-weight:700; font-size:13px; flex-shrink:0; }
+  .chat-panel-close { background:transparent; border:none; color:var(--muted); font-size:20px; cursor:pointer; line-height:1; padding:0 4px; }
+  .chat-panel-close:hover { color:var(--red); }
+  .chat-panel-body { flex:1; overflow-y:auto; padding:12px 14px; }
+  .chat-panel-input-row { display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--border); flex-shrink:0; }
+
+  .chat-row { margin-bottom:10px; display:flex; }
+  .chat-row.user { justify-content:flex-end; }
+  .chat-bubble { max-width:85%; padding:9px 14px; border-radius:12px; font-size:13px; line-height:1.5; white-space:pre-wrap; }
+  .chat-bubble.user { background:var(--blue); color:#fff; border-bottom-right-radius:3px; }
+  .chat-bubble.assistant { background:var(--surface2); color:var(--text); border-bottom-left-radius:3px; }
+  .chat-bubble.thinking { color:var(--muted); font-style:italic; }
 </style>
 </head>
 <body>
@@ -289,6 +317,21 @@
       <button class="hist-close" onclick="closeHistory()">×</button>
     </div>
     <div class="hist-list" id="hist-list"></div>
+  </div>
+</div>
+<div id="chat-widget" style="display:none">
+  <button id="chat-fab" aria-label="Open chat">💬</button>
+  <div id="chat-panel">
+    <div class="chat-panel-header">
+      <span>Ask about your finances</span>
+      <button class="chat-panel-close" onclick="toggleChatPanel()">×</button>
+    </div>
+    <div class="chat-panel-body" id="chat-messages"></div>
+    <div class="chat-panel-input-row">
+      <input type="text" id="chat-input" placeholder="e.g. How much do I owe?"
+        onkeydown="if(event.key==='Enter') sendChatMessage()"/>
+      <button class="btn-add btn-blue" id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+    </div>
   </div>
 </div>
 
@@ -407,11 +450,16 @@ function launchApp() {
   document.getElementById('approval-tab-btn').style.display = USER_ROLE === 'super_admin' ? '' : 'none';
   renderDashboard();
   updateApprovalBadge();
+  document.getElementById('chat-widget').style.display = 'block';
+  positionFabDefault();
 }
 
 function logout() {
   USERNAME = null; USER_ROLE = "user"; VIEWING_USER = null;
   STATE = { credits:[], disbursements:[], bills:[], ccBills:[], inflows:[], bankAccounts:[] };
+  resetChat();
+  document.getElementById('chat-widget').style.display = 'none';
+  document.getElementById('chat-panel').classList.remove('open');
   document.getElementById('username-input').value = '';
   document.getElementById('admin-pass-input').value = '';
   document.getElementById('auth-error').textContent = '';
@@ -907,7 +955,149 @@ async function saveRowEdit(table, id) {
   renderDashboard();
   toast('Updated ✓');
 }
+// ── CHAT (floating draggable widget, own-data only) ──
+let chatHistory = []; // in-memory only, resets on logout / user switch
+let fabPos = null;
+let fabDragging = false;
+let fabDragMoved = false;
+let fabDragOffset = { x:0, y:0 };
 
+function initChatFab() {
+  const fab = document.getElementById('chat-fab');
+  if (!fab) return;
+  fab.addEventListener('pointerdown', onFabPointerDown);
+  window.addEventListener('resize', onWindowResizeFab);
+}
+
+function positionFabDefault() {
+  const fab = document.getElementById('chat-fab');
+  if (!fab) return;
+  const margin = 20;
+  const x = window.innerWidth - fab.offsetWidth - margin;
+  const y = window.innerHeight - fab.offsetHeight - margin;
+  fab.style.left = x + 'px';
+  fab.style.top = y + 'px';
+  fabPos = { x, y };
+}
+
+function onFabPointerDown(e) {
+  const fab = document.getElementById('chat-fab');
+  fab.setPointerCapture(e.pointerId);
+  fabDragging = true;
+  fabDragMoved = false;
+  const rect = fab.getBoundingClientRect();
+  fabDragOffset.x = e.clientX - rect.left;
+  fabDragOffset.y = e.clientY - rect.top;
+  fab.addEventListener('pointermove', onFabPointerMove);
+  fab.addEventListener('pointerup', onFabPointerUp);
+}
+
+function onFabPointerMove(e) {
+  if (!fabDragging) return;
+  fabDragMoved = true;
+  const fab = document.getElementById('chat-fab');
+  let x = e.clientX - fabDragOffset.x;
+  let y = e.clientY - fabDragOffset.y;
+  const maxX = window.innerWidth - fab.offsetWidth - 6;
+  const maxY = window.innerHeight - fab.offsetHeight - 6;
+  x = Math.max(6, Math.min(x, maxX));
+  y = Math.max(6, Math.min(y, maxY));
+  fab.style.left = x + 'px';
+  fab.style.top = y + 'px';
+  fabPos = { x, y };
+  repositionChatPanel();
+}
+
+function onFabPointerUp(e) {
+  const fab = document.getElementById('chat-fab');
+  fab.removeEventListener('pointermove', onFabPointerMove);
+  fab.removeEventListener('pointerup', onFabPointerUp);
+  fabDragging = false;
+  if (!fabDragMoved) toggleChatPanel();
+}
+
+function onWindowResizeFab() {
+  const fab = document.getElementById('chat-fab');
+  if (!fab || !fabPos) return;
+  const maxX = window.innerWidth - fab.offsetWidth - 6;
+  const maxY = window.innerHeight - fab.offsetHeight - 6;
+  fabPos.x = Math.min(fabPos.x, Math.max(6, maxX));
+  fabPos.y = Math.min(fabPos.y, Math.max(6, maxY));
+  fab.style.left = fabPos.x + 'px';
+  fab.style.top = fabPos.y + 'px';
+  repositionChatPanel();
+}
+
+function repositionChatPanel() {
+  const panel = document.getElementById('chat-panel');
+  const fab = document.getElementById('chat-fab');
+  if (!panel.classList.contains('open')) return;
+  const fabRect = fab.getBoundingClientRect();
+  const panelW = panel.offsetWidth, panelH = panel.offsetHeight;
+
+  let left = fabRect.left;
+  let top = fabRect.top - panelH - 12; // prefer opening above the bubble
+  if (top < 10) top = fabRect.bottom + 12; // not enough room above -> open below
+
+  if (left + panelW > window.innerWidth - 10) left = window.innerWidth - panelW - 10;
+  if (left < 10) left = 10;
+  if (top + panelH > window.innerHeight - 10) top = window.innerHeight - panelH - 10;
+  if (top < 10) top = 10;
+
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
+}
+
+function toggleChatPanel() {
+  const panel = document.getElementById('chat-panel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) {
+    repositionChatPanel();
+    renderChatMessages();
+  }
+}
+
+function renderChatMessages() {
+  const el = document.getElementById('chat-messages');
+  if (!el) return;
+  if (chatHistory.length === 0) {
+    el.innerHTML = '<div class="empty">Try: "how much do I owe?" or "what\'s my CC bill total?"</div>';
+    return;
+  }
+  el.innerHTML = chatHistory.map(m => `
+    <div class="chat-row ${m.role==='user'?'user':''}">
+      <div class="chat-bubble ${m.role}${m.thinking?' thinking':''}">${m.text}</div>
+    </div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const question = input.value.trim();
+  if (!question) return;
+
+  chatHistory.push({ role:'user', text: question });
+  input.value = '';
+  const btn = document.getElementById('chat-send-btn');
+  btn.disabled = true;
+  chatHistory.push({ role:'assistant', text:'Thinking…', thinking:true });
+  renderChatMessages();
+
+  const { data, error } = await sb.functions.invoke('chat-assistant', {
+    body: { username: uid(), question }
+  });
+
+  chatHistory.pop(); // remove "Thinking…"
+  if (error) {
+    chatHistory.push({ role:'assistant', text:'Sorry, something went wrong reaching the assistant.' });
+  } else {
+    chatHistory.push({ role:'assistant', text: (data && data.answer) || 'No response.' });
+  }
+  btn.disabled = false;
+  renderChatMessages();
+}
+
+function resetChat() { chatHistory = []; }
 // ── ACTIVITY LOG (History) ───────────────────
 // Requires a Supabase table `activity_log` — see setup note at bottom of file.
 async function logActivity(table, action, name, amount) {
@@ -979,6 +1169,7 @@ async function del(table, id) {
 async function viewUser(username) {
   if(USER_ROLE !== "super_admin") { toast("Access Denied", true); return; }
   VIEWING_USER = username;
+  resetChat();
   await loadAll();
   renderDashboard();
   switchTab("dashboard", document.querySelector(".tab-btn"));
@@ -987,6 +1178,7 @@ async function viewUser(username) {
 
 async function exitUserView() {
   VIEWING_USER = null;
+  resetChat();
   await loadAll();
   renderDashboard();
   switchTab("dashboard", document.querySelector(".tab-btn"));
@@ -1059,6 +1251,7 @@ function downloadCSV() {
 }
 
 renderUserChips();
+initChatFab();
 </script>
 </body>
 </html>
