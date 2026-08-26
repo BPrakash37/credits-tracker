@@ -50,7 +50,19 @@
 
   #app-screen { display:none; min-height:100vh; flex-direction:column; }
   #app-screen.visible { display:flex; }
-  .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; flex-shrink:0; }
+  .topbar {
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:12px 20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  position:sticky;
+  top:0;
+  z-index:100;
+  flex-shrink:0;
+  gap:12px;
+}
   .app-name { font-size:15px; font-weight:700; }
   .app-sub { font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); }
   .topbar-right { display:flex; align-items:center; gap:8px; flex-wrap:nowrap;flex-shrink:0;}
@@ -193,6 +205,7 @@
   .hist-action { border-radius:6px; padding:2px 7px; font-size:9px; font-weight:700; font-family:var(--mono); flex-shrink:0; letter-spacing:.05em; }
   .hist-action.edit { background:#7b8cde22; color:var(--blue); }
   .hist-action.delete { background:#f0654a22; color:var(--red); }
+  .hist-action.new { background:#3de89a22; color:var(--green); }
   .hist-name { flex:1; font-weight:500; }
   .hist-amt { font-family:var(--mono); font-size:11px; color:var(--muted); flex-shrink:0; }
 </style>
@@ -769,7 +782,9 @@ async function addCC() {
   if (!name||!amount) { toast('Fill card name and amount', true); return; }
   const { data, error } = await sb.from('cc_bills').insert({ user_id:uid(), name, amount }).select().single();
   if (error) { toast('Error: '+error.message, true); return; }
-  STATE.ccBills.push(data); renderCC(); renderDashboard(); toast('Added ✓');
+  STATE.ccBills.push(data);
+  logActivity('cc_bills', 'new', name, amount);
+  renderCC(); renderDashboard(); toast('Added ✓');
 }
 
 async function addInflow() {
@@ -778,7 +793,9 @@ async function addInflow() {
   if (!name||!amount) { toast('Fill source and amount', true); return; }
   const { data, error } = await sb.from('inflows').insert({ user_id:uid(), name, amount }).select().single();
   if (error) { toast('Error: '+error.message, true); return; }
-  STATE.inflows.push(data); renderCC(); renderDashboard(); toast('Added ✓');
+  STATE.inflows.push(data);
+  logActivity('inflows', 'new', name, amount);
+  renderCC(); renderDashboard(); toast('Added ✓');
 }
 
 async function addBankAccount() {
@@ -788,6 +805,7 @@ async function addBankAccount() {
   const { data, error } = await sb.from('bank_accounts').insert({ user_id: uid(), name, balance }).select().single();
   if (error) { toast('Error: '+error.message, true); return; }
   STATE.bankAccounts.push(data);
+  logActivity('bank_accounts', 'new', name, balance);
   renderCC(); renderDashboard(); toast('Bank account added ✓');
 }
 
@@ -919,16 +937,18 @@ async function showHistory(table, label) {
   if (error) { document.getElementById('hist-list').innerHTML = '<div class="empty">Error loading history</div>'; return; }
   if (!data || data.length===0) { document.getElementById('hist-list').innerHTML = '<div class="empty">No edits or deletions logged yet</div>'; return; }
 
-  document.getElementById('hist-list').innerHTML = data.map(h => `
+  document.getElementById('hist-list').innerHTML = data.map(h => {
+    const ts = new Date(h.created_at);
+    const dateStr = ts.toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
+    const timeStr = ts.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false});
+    return `
     <div class="hist-row">
-      <span class="hist-date">
-        ${new Date(h.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}
-        - ${new Date(h.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})}
-      </span>
-      <span class="hist-action ${h.action}">${h.action==='edit'?'EDITED':'DELETED'}</span>
+      <span class="hist-date">${dateStr}<span class="hist-time">${timeStr}</span></span>
+      <span class="hist-action ${h.action}">${h.action==='edit'?'EDITED':h.action==='delete'?'DELETED':'NEW'}</span>
       <span class="hist-name">${h.name||'—'}</span>
       <span class="hist-amt">${h.amount!=null ? fmt(+h.amount) : ''}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function closeHistory() {
