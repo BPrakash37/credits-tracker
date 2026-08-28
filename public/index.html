@@ -1133,7 +1133,7 @@ async function showHistory(table, label) {
     const timeStr = ts.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false});
     return `
     <div class="hist-row">
-      <span class="hist-date">${dateStr}<span class="hist-time">${timeStr}</span></span>
+      <span class="hist-date">${dateStr} - <span class="hist-time">${timeStr}</span></span>
       <span class="hist-action ${h.action}">${h.action==='edit'?'EDITED':h.action==='delete'?'DELETED':'NEW'}</span>
       <span class="hist-name">${h.name||'—'}</span>
       <span class="hist-amt">${h.amount!=null ? fmt(+h.amount) : ''}</span>
