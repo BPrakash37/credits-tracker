@@ -11,6 +11,10 @@ jobs:
     steps:
       - name: Ping Supabase
         run: |
-          curl -s "https://xvtbmxtstejldgsjzdft.supabase.co/rest/v1/bank_accounts?select=*&limit=1" \
-          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+          curl --fail --silent --show-error \
+            --retry 3 \
+            -o /dev/null \
+            -w "Supabase HTTP Status: %{http_code}\n" \
+            "https://xvtbmxtstejldgsjzdft.supabase.co/rest/v1/bank_accounts?select=*&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
